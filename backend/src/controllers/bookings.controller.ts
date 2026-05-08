@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middlewares/auth';
 import prisma from '../utils/prisma';
 import { createAuditLog } from '../utils/audit';
@@ -82,7 +83,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         if (!finalRoomId) return res.status(400).json({ error: 'A specific room must be assigned to check in.' });
 
         // Update the booking status and room status transactionally, and create a Folio
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
             const updatedBooking = await tx.booking.update({
                 where: { id },
                 data: { status: 'CHECKED_IN', roomId: finalRoomId }
@@ -133,7 +134,7 @@ export const cancelBooking = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: `Cannot cancel a booking with status ${booking.status}` });
         }
 
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
             const updated = await tx.booking.update({
                 where: { id },
                 data: { status: 'CANCELLED' }
