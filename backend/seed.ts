@@ -20,43 +20,49 @@ async function main() {
   });
   console.log('Created owner user.');
 
-  // 2. Room Types
-  const execType = await prisma.roomType.create({
-    data: { name: 'Executive Room', basePrice: 870, capacity: 2 }
+  // 2. Room Types (Melva Guest House — 5 rooms)
+  const execType = await prisma.roomType.upsert({
+    where: { name: 'Executive Room' },
+    update: {},
+    create: { name: 'Executive Room', basePrice: 870, capacity: 2 }
   });
-  const jrExecType = await prisma.roomType.create({
-    data: { name: 'Junior Executive Room', basePrice: 770, capacity: 2 }
+  const jrExecType = await prisma.roomType.upsert({
+    where: { name: 'Junior Executive Room' },
+    update: {},
+    create: { name: 'Junior Executive Room', basePrice: 770, capacity: 2 }
   });
-  const standardType = await prisma.roomType.create({
-    data: { name: 'Standard Room', basePrice: 670, capacity: 2 }
+  const standardType = await prisma.roomType.upsert({
+    where: { name: 'Standard Room' },
+    update: {},
+    create: { name: 'Standard Room', basePrice: 670, capacity: 2 }
   });
   console.log('Created room types.');
 
-  // 3. Physical Rooms
-  await prisma.room.createMany({
-    data: [
-      { number: '101', roomTypeId: execType.id, status: 'VACANT_CLEAN' },
-      { number: '102', roomTypeId: execType.id, status: 'VACANT_CLEAN' },
-      { number: '103', roomTypeId: execType.id, status: 'VACANT_CLEAN' },
-      { number: '201', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
-      { number: '202', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
-      { number: '203', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
-      { number: '301', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },
-      { number: '302', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },
-      { number: '303', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },
-    ]
-  });
-  console.log('Created 9 rooms.');
+  // 3. Physical Rooms — Melva has 5 units
+  const roomsToCreate = [
+    { number: '1', roomTypeId: execType.id, status: 'VACANT_CLEAN' },
+    { number: '2', roomTypeId: execType.id, status: 'VACANT_CLEAN' },
+    { number: '3', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
+    { number: '4', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
+    { number: '5', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },
+  ];
+  for (const r of roomsToCreate) {
+    await prisma.room.upsert({ where: { number: r.number }, update: {}, create: r as any });
+  }
+  console.log('Created 5 rooms for Melva Guest House.');
 
   // 4. Settings
-  await prisma.settings.createMany({
-    data: [
-      { key: 'SERVICE_BREAKFAST_PRICE', value: '100' },
-      { key: 'SERVICE_AIRPORT_TRANSFER_PRICE', value: '100' },
-      { key: 'DEPOSIT_PERCENTAGE', value: '20' },
-      { key: 'LARGE_BOOKING_THRESHOLD_NIGHTS', value: '5' }
-    ]
-  });
+  const settingsData = [
+    { key: 'PROPERTY_NAME', value: 'The Melva Elegant Guest House' },
+    { key: 'SERVICE_BREAKFAST_PRICE', value: '100' },
+    { key: 'SERVICE_LAUNDRY_PRICE', value: '80' },
+    { key: 'SERVICE_AIRPORT_TRANSFER_PRICE', value: '150' },
+    { key: 'DEPOSIT_PERCENTAGE', value: '20' },
+    { key: 'LARGE_BOOKING_THRESHOLD_NIGHTS', value: '5' }
+  ];
+  for (const s of settingsData) {
+    await prisma.settings.upsert({ where: { key: s.key }, update: {}, create: s });
+  }
   console.log('Created settings.');
 
   console.log('Seeding complete.');

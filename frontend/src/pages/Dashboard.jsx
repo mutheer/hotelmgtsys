@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush } from 'lucide-react';
+import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush, BarChart3 } from 'lucide-react';
 import Guests from './Guests';
 import Calendar from './Calendar';
 import Housekeeping from './Housekeeping';
 import Billing from './Billing';
 import Overview from './Overview';
 import RoomSetup from './RoomSetup';
+import Settings from './Settings';
+import Reports from './Reports';
 
 // Placeholder empty components for routing
 // Removed placeholders
@@ -55,6 +57,9 @@ const Dashboard = ({ setAuth }) => {
           {(user?.role === 'OWNER' || user?.role === 'ACCOUNTANT') && (
             <NavItem to="/rooms" icon={BedDouble} label="Room Setup" />
           )}
+          {(user?.role === 'OWNER' || user?.role === 'ACCOUNTANT') && (
+            <NavItem to="/reports" icon={BarChart3} label="Reports" />
+          )}
         </nav>
 
         <div style={{ padding: '24px 12px', borderTop: '1px solid var(--border-light)' }}>
@@ -97,7 +102,8 @@ const Dashboard = ({ setAuth }) => {
                 
                 {/* Protected Routes */}
                 <Route path="/rooms" element={(user.role === 'OWNER' || user.role === 'ACCOUNTANT') ? <RoomSetup /> : <Navigate to="/" />} />
-                <Route path="/settings" element={user.role === 'OWNER' ? <p>Settings (Admin Only)</p> : <Navigate to="/" />} />
+                <Route path="/settings" element={user.role === 'OWNER' ? <Settings /> : <Navigate to="/" />} />
+                <Route path="/reports" element={(user.role === 'OWNER' || user.role === 'ACCOUNTANT') ? <Reports /> : <Navigate to="/" />} />
                 
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>

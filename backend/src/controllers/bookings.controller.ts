@@ -122,3 +122,64 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
     }
 }
 
+export const cancelBooking = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const { reason } = req.body;
+
+        const booking = await prisma.booking.findUnique({ where: { id } });
+        if (!booking) return res.status(404).json({ error: 'Booking not found' });
+        if (['CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'].includes(booking.status)) {
+            return res.status(400).json({ error: `Cannot cancel a booking with status ${booking.status}` });
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            const updated = await tx.booking.update({
+                where: { id },
+                data: { status: 'CANCELLED' }
+            });
+
+            await tx.cancellation.create({
+                data: { bookingId: id, reason: reason || 'No reason provided', feeCharged: 0 }
+            });
+
+            if (booking.roomId) {
+                await tx.room.update({ where: { id: booking.roomId }, data: { status: 'VACANT_CLEAN' } });
+            }
+
+            return updated;
+        });
+
+        await createAuditLog(req.user!.id, 'CANCEL_BOOKING', 'Booking', id, booking, result);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const updateBooking = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const { checkOutDate, notes } = req.body;
+
+        const booking = await prisma.booking.findUnique({ where: { id } });
+        if (!booking) return res.status(404).json({ error: 'Booking not found' });
+        if (booking.status === 'CHECKED_OUT' || booking.status === 'CANCELLED') {
+            return res.status(400).json({ error: 'Cannot modify a completed or cancelled booking' });
+        }
+
+        const updated = await prisma.booking.update({
+            where: { id },
+            data: {
+                ...(checkOutDate && { checkOutDate: new Date(checkOutDate) }),
+                ...(notes !== undefined && { notes })
+            }
+        });
+
+        await createAuditLog(req.user!.id, 'UPDATE_BOOKING', 'Booking', id, booking, updated);
+        res.json(updated);
+    } catch (err) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+

@@ -1,3 +1,5 @@
+import { Router } from 'express';
+import { authenticate, requireRole } from '../middlewares/auth';
 import { getRoomTypes, createRoomType, getRooms, createRoom, getAvailableRooms } from '../controllers/rooms.controller';
 
 const router = Router();

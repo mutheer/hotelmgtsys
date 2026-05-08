@@ -42,3 +42,50 @@ export const updateRoomStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getTasks = async (req: AuthRequest, res: Response) => {
+  try {
+    const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+
+    const tasks = await prisma.housekeepingTask.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      include: { room: true },
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json(tasks);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const createTask = async (req: AuthRequest, res: Response) => {
+  try {
+    const { roomId, notes } = req.body;
+    const task = await prisma.housekeepingTask.create({
+      data: { roomId, notes, status: 'PENDING', assignedTo: req.user!.id },
+      include: { room: true }
+    });
+    res.status(201).json(task);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const updateTask = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { status } = req.body;
+    const task = await prisma.housekeepingTask.update({
+      where: { id },
+      data: { status },
+      include: { room: true }
+    });
+    res.json(task);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
