@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// In Prisma v6+ we typically use env() directly in datasource here if using standard setup
+// The prisma init command may have created prisma.config.ts, but let's stick to standard DB connection
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ACCOUNTANT
+  RECEPTIONIST
+}
+
+enum BookingSource {
+  WALK_IN
+  PHONE
+  WHATSAPP
+  BOOKING_COM
+  AIRBNB
+  AGODA
+  FACEBOOK
+  INSTAGRAM
+  WEBSITE_DIRECT
+  OTHER
+}
+
+enum RoomStatus {
+  VACANT_CLEAN
+  VACANT_DIRTY
+  OCCUPIED_CLEAN
+  OCCUPIED_DIRTY
+  OUT_OF_ORDER
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_MONEY
+  EFT
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  passwordHash String
+  name         String
+  role         Role
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  auditLogs    AuditLog[]
+  bookings     Booking[]  @relation("BookedBy")
+  payments     Payment[]
+  housekeeping HousekeepingTask[]
+  discounts    Discount[] @relation("DiscountGrantedBy")
+}
+
+model Guest {
+  id         String     @id @default(uuid())
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String     @unique
+  idNumber   String?    // Passport or Omang
+  idType     String?    // E.g., 'Passport', 'Omang'
+  address    String?
+  dob        DateTime?  // Date of Birth
+  notes      String?
+  isRepeat   Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  bookings   Booking[]
+  documents  GuestDocument[]
+}
+
+model GuestDocument {
+  id         String   @id @default(uuid())
+  guestId    String
+  documentUrl String  // Local file path
+  type       String   // ID Scan, etc
+  createdAt  DateTime @default(now())
+
+  guest      Guest    @relation(fields: [guestId], references: [id])
+}
+
+model RoomType {
+  id           String     @id @default(uuid())
+  name         String     @unique // Executive Room, Junior Executive Room, Standard Room
+  basePrice    Float
+  capacity     Int        @default(2)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  rooms        Room[]
+}
+
+model Room {
+  id           String      @id @default(uuid())
+  number       String      @unique
+  roomTypeId   String
+  status       RoomStatus  @default(VACANT_CLEAN)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  type         RoomType    @relation(fields: [roomTypeId], references: [id])
+  bookings     Booking[]
+  statusHistory RoomStatusHistory[]
+  housekeeping  HousekeepingTask[]
+}
+
+model Booking {
+  id             String        @id @default(uuid())
+  guestId        String
+  userId         String        // User who created the booking
+  roomId         String?       // Assigned room (can be null if just a room type block initially)
+  roomTypeId     String        // Expected room type
+  source         BookingSource
+  status         BookingStatus @default(CONFIRMED)
+  checkInDate    DateTime
+  checkOutDate   DateTime
+  depositPaid    Float         @default(0)
+  isBlock        Boolean       @default(false)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  guest          Guest         @relation(fields: [guestId], references: [id])
+  user           User          @relation("BookedBy", fields: [userId], references: [id])
+  room           Room?         @relation(fields: [roomId], references: [id])
+  folio          Folio?        // 1-to-1 relationship with Folio
+
+  cancellation   Cancellation?
+}
+
+model Cancellation {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique
+  reason     String
+  feeCharged Float    @default(0)
+  createdAt  DateTime @default(now())
+
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+}
+
+model Folio {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique
+  status     String   @default("OPEN") // OPEN, CLOSED
+  totalAmount Float   @default(0)
+  balanceDue  Float   @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  services   ServiceCharge[]
+  payments   Payment[]
+  discounts  Discount[]
+  invoices   Invoice[]
+}
+
+model ServiceCharge {
+  id          String   @id @default(uuid())
+  folioId     String
+  description String   // e.g., 'Breakfast', 'Laundry - 2 shirts'
+  amount      Float
+  date        DateTime @default(now())
+
+  folio       Folio    @relation(fields: [folioId], references: [id])
+}
+
+model Discount {
+  id          String   @id @default(uuid())
+  folioId     String
+  userId      String   // Who granted it
+  reason      String
+  amount      Float
+  createdAt   DateTime @default(now())
+
+  folio       Folio    @relation(fields: [folioId], references: [id])
+  grantedBy   User     @relation("DiscountGrantedBy", fields: [userId], references: [id])
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  folioId     String
+  userId      String
+  amount      Float
+  method      PaymentMethod
+  reference   String?       // Transaction ID or check number
+  createdAt   DateTime      @default(now())
+
+  folio       Folio         @relation(fields: [folioId], references: [id])
+  user        User          @relation(fields: [userId], references: [id])
+}
+
+model Invoice {
+  id          String   @id @default(uuid())
+  folioId     String
+  invoiceNum  String   @unique
+  pdfUrl      String?  // Path to generated PDF
+  createdAt   DateTime @default(now())
+
+  folio       Folio    @relation(fields: [folioId], references: [id])
+}
+
+model HousekeepingTask {
+  id          String   @id @default(uuid())
+  roomId      String
+  assignedTo  String?  // Can be a User ID or string representing cleaning staff
+  status      String   @default("PENDING") // PENDING, COMPLETED
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  room        Room     @relation(fields: [roomId], references: [id])
+  user        User?    @relation(fields: [assignedTo], references: [id])
+}
+
+model RoomStatusHistory {
+  id          String     @id @default(uuid())
+  roomId      String
+  status      RoomStatus
+  changedBy   String?    // User ID who changed it
+  reason      String?
+  createdAt   DateTime   @default(now())
+
+  room        Room       @relation(fields: [roomId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  action      String   // e.g., 'MANUAL_DISCOUNT', 'RATE_OVERRIDE', 'BOOKING_CANCELLED'
+  entity      String   // e.g., 'Folio', 'Booking'
+  entityId    String
+  beforeValue String?  // JSON string
+  afterValue  String?  // JSON string
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Settings {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String   // JSON string or plain text depending on key
+  updatedAt   DateTime @updatedAt
+}
