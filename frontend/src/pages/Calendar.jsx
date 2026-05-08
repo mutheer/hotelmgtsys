@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Calendar as CalendarIcon, Plus, Check } from 'lucide-react';
+import { Plus, Check, X, Edit2 } from 'lucide-react';
 import BookingModal from '../components/BookingModal';
+import Modal from '../components/Modal';
+
+const API = 'http://localhost:5000/api';
 
 const Calendar = () => {
   const [bookings, setBookings] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editBooking, setEditBooking] = useState(null);
+  const [editCheckOut, setEditCheckOut] = useState('');
+  const [editNotes, setEditNotes] = useState('');
 
   // Default to today, but allow scrolling up to 24 months
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -46,6 +52,42 @@ const Calendar = () => {
       fetchData();
     } catch (err) {
       alert(err.response?.data?.error || "Check-in failed");
+    }
+  };
+
+  const openEdit = (booking, e) => {
+    e.stopPropagation();
+    setEditBooking(booking);
+    setEditCheckOut(new Date(booking.checkOutDate).toISOString().split('T')[0]);
+    setEditNotes(booking.notes || '');
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API}/bookings/${editBooking.id}`, { checkOutDate: editCheckOut, notes: editNotes }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEditBooking(null);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Update failed');
+    }
+  };
+
+  const handleCancel = async (bookingId, guestName, e) => {
+    e.stopPropagation();
+    const reason = window.prompt(`Cancel booking for ${guestName}?\nEnter reason (or leave blank):`);
+    if (reason === null) return; // user pressed Cancel on prompt
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5000/api/bookings/${bookingId}/cancel`, { reason: reason || 'Cancelled by staff' }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.error || "Cancellation failed");
     }
   };
 
@@ -157,12 +199,29 @@ const Calendar = () => {
                                             >
                                                 <span>{booking.guest?.firstName}</span>
                                                 {booking.status === 'CONFIRMED' && (
-                                                    <button 
-                                                        onClick={() => handleCheckIn(booking.id)}
-                                                        style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', padding: '2px' }}
-                                                    >
-                                                        <Check size={12} />
-                                                    </button>
+                                                    <span style={{ display: 'flex', gap: '2px' }}>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleCheckIn(booking.id); }}
+                                                            title="Check In"
+                                                            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', padding: '2px' }}
+                                                        >
+                                                            <Check size={12} />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => openEdit(booking, e)}
+                                                            title="Edit Booking"
+                                                            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', padding: '2px' }}
+                                                        >
+                                                            <Edit2 size={12} />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => handleCancel(booking.id, `${booking.guest?.firstName} ${booking.guest?.lastName}`, e)}
+                                                            title="Cancel Booking"
+                                                            style={{ background: 'rgba(239,68,68,0.4)', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', padding: '2px' }}
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </span>
                                                 )}
                                             </div>
                                         )}
@@ -179,11 +238,46 @@ const Calendar = () => {
         </div>
       )}
 
-      <BookingModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onBookingCreated={fetchData} 
+      <BookingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onBookingCreated={fetchData}
       />
+
+      {editBooking && (
+        <Modal isOpen={!!editBooking} onClose={() => setEditBooking(null)} title="Edit Booking">
+          <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
+            {editBooking.guest?.firstName} {editBooking.guest?.lastName} — Room {editBooking.room?.number}
+          </p>
+          <form onSubmit={handleUpdate}>
+            <div className="input-group">
+              <label className="input-label">Check-Out Date</label>
+              <input
+                type="date"
+                className="input-field"
+                value={editCheckOut}
+                min={new Date(editBooking.checkInDate).toISOString().split('T')[0]}
+                onChange={e => setEditCheckOut(e.target.value)}
+                required
+              />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Notes / Special Requests</label>
+              <textarea
+                className="input-field"
+                rows="3"
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Changes</button>
+              <button type="button" className="btn" onClick={() => setEditBooking(null)} style={{ flex: 1, background: 'rgba(255,255,255,0.05)' }}>Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -1,0 +1,87 @@
+{
+  "name": "melva-hotel-management",
+  "version": "1.0.0",
+  "description": "The Melva Elegant Guest House — Hotel Management System",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "copy:frontend": "cp -r frontend/dist backend/dist/public",
+    "build": "npm run build:backend && npm run build:frontend && npm run copy:frontend",
+    "start": "electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.melva.hotel",
+    "productName": "The Melva",
+    "copyright": "The Melva Elegant Guest House",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron/assets"
+    },
+    "files": [
+      "electron/main.js",
+      "electron/loading.html"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist",
+        "to": "backend/dist",
+        "filter": ["**/*", "!**/*.map"]
+      },
+      {
+        "from": "backend/node_modules",
+        "to": "backend/node_modules"
+      },
+      {
+        "from": "backend/prisma/migrations",
+        "to": "backend/prisma/migrations"
+      },
+      {
+        "from": "backend/prisma/schema.prisma",
+        "to": "backend/prisma/schema.prisma"
+      }
+    ],
+    "asarUnpack": [
+      "**/backend/node_modules/.prisma/**",
+      "**/backend/node_modules/@prisma/client/**",
+      "**/backend/node_modules/prisma/**"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "zip",  "arch": ["x64"] }
+      ],
+      "icon": "electron/assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] }
+      ],
+      "icon": "electron/assets/icon.png",
+      "category": "Office"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "electron/assets/icon.icns"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/assets/icon.ico",
+      "installerHeaderIcon": "electron/assets/icon.ico",
+      "shortcutName": "The Melva",
+      "runAfterFinish": true
+    }
+  }
+}

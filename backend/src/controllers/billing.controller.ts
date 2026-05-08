@@ -12,17 +12,18 @@ export const getFolio = async (req: AuthRequest, res: Response) => {
     }) as any;
     if(!folio) return res.status(404).json({ error: 'Folio not found' });
     
-    // Recalculate totals on the fly to ensure absolute accuracy
-    // Base Room Charge calculation logic would go here (depends on dates and rate)
-    let totalServices = (folio.services || []).reduce((acc: number, curr: any) => acc + curr.amount, 0);
-    let totalPayments = (folio.payments || []).reduce((acc: number, curr: any) => acc + curr.amount, 0);
-    let totalDiscounts = (folio.discounts || []).reduce((acc: number, curr: any) => acc + curr.amount, 0);
-    
-    // Simplified: Room Base Rate processing - normally would count nights * rate
-    // Leaving standard room charge calculation abstract for this brief, we just handle services + manual charges
-    const calculatedBalance = folio.totalAmount + totalServices - totalPayments - totalDiscounts;
+    const checkIn = new Date(folio.booking.checkInDate);
+    const checkOut = new Date(folio.booking.checkOutDate);
+    const nights = Math.max(1, Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
+    const ratePerNight = folio.booking.room?.type?.basePrice ?? 0;
+    const roomBaseCharge = nights * ratePerNight;
 
-    res.json({ ...folio, calculatedBalance, totalServices, totalPayments, totalDiscounts });
+    const totalServices = (folio.services || []).reduce((acc: number, curr: any) => acc + curr.amount, 0);
+    const totalPayments = (folio.payments || []).reduce((acc: number, curr: any) => acc + curr.amount, 0);
+    const totalDiscounts = (folio.discounts || []).reduce((acc: number, curr: any) => acc + curr.amount, 0);
+    const calculatedBalance = roomBaseCharge + totalServices - totalPayments - totalDiscounts;
+
+    res.json({ ...folio, calculatedBalance, roomBaseCharge, nights, ratePerNight, totalServices, totalPayments, totalDiscounts });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
