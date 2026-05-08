@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middlewares/auth';
 import prisma from '../utils/prisma';
 import { createAuditLog } from '../utils/audit';
@@ -22,7 +23,7 @@ export const updateRoomStatus = async (req: AuthRequest, res: Response) => {
 
     const oldRoom = await prisma.room.findUnique({ where: { id } });
     
-    const room = await prisma.$transaction(async (tx) => {
+    const room = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const updated = await tx.room.update({
             where: { id },
             data: { status }

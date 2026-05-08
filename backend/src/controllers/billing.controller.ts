@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middlewares/auth';
 import prisma from '../utils/prisma';
 import { createAuditLog } from '../utils/audit';
@@ -64,7 +65,7 @@ export const checkoutFolio = async (req: AuthRequest, res: Response) => {
     const folio = await prisma.folio.findUnique({ where: { id }, include: { booking: true } }) as any;
     if(!folio) return res.status(404).json({ error: 'Folio not found' });
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
        const updatedFolio = await tx.folio.update({
          where: { id },
          data: { status: 'CLOSED' }
