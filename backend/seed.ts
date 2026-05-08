@@ -41,20 +41,20 @@ async function main() {
   // 3. Physical Rooms — Melva Guest House: 9 rooms
   // 1 Executive, 4 Junior Executive, 4 Standard
   const roomsToCreate = [
-    { number: '101', roomTypeId: execType.id, status: 'VACANT_CLEAN' },       // Executive (1)
-    { number: '201', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },     // Junior Executive (4)
-    { number: '202', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
-    { number: '203', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
-    { number: '204', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },
-    { number: '301', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },   // Standard (4)
-    { number: '302', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },
-    { number: '303', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },
-    { number: '304', roomTypeId: standardType.id, status: 'VACANT_CLEAN' },
+    { number: '1', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },    // Junior Executive
+    { number: '2', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },    // Junior Executive
+    { number: '3', roomTypeId: standardType.id, status: 'VACANT_CLEAN' }, // Standard
+    { number: '4', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },    // Junior Executive
+    { number: '5', roomTypeId: standardType.id, status: 'VACANT_CLEAN' }, // Standard
+    { number: '6', roomTypeId: jrExecType.id, status: 'VACANT_CLEAN' },    // Junior Executive
+    { number: '7', roomTypeId: standardType.id, status: 'VACANT_CLEAN' }, // Standard
+    { number: '8', roomTypeId: standardType.id, status: 'VACANT_CLEAN' }, // Standard
+    { number: '9', roomTypeId: execType.id, status: 'VACANT_CLEAN' },      // Executive
   ];
   for (const r of roomsToCreate) {
     await prisma.room.upsert({ where: { number: r.number }, update: { roomTypeId: r.roomTypeId }, create: r as any });
   }
-  console.log('Created/updated 9 rooms for Melva Guest House (1 Executive, 4 Junior Executive, 4 Standard).');
+  console.log('Created/updated 9 rooms: Rooms 3,5,7,8 Standard | Rooms 1,2,4,6 Junior Executive | Room 9 Executive.');
 
   // 4. Settings
   const settingsData = [
