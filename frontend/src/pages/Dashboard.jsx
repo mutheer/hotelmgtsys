@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush, BarChart3, UsersRound } from 'lucide-react';
 import Guests from './Guests';
 import Calendar from './Calendar';
 import Housekeeping from './Housekeeping';
@@ -9,6 +9,7 @@ import Overview from './Overview';
 import RoomSetup from './RoomSetup';
 import Settings from './Settings';
 import Reports from './Reports';
+import Staff from './Staff';
 
 // Placeholder empty components for routing
 // Removed placeholders
@@ -64,6 +65,9 @@ const Dashboard = ({ setAuth }) => {
 
         <div style={{ padding: '24px 12px', borderTop: '1px solid var(--border-light)' }}>
           {user?.role === 'OWNER' && (
+            <NavItem to="/staff" icon={UsersRound} label="Staff" />
+          )}
+          {user?.role === 'OWNER' && (
              <NavItem to="/settings" icon={ConfigIcon} label="Settings" />
           )}
           <button 
@@ -103,6 +107,7 @@ const Dashboard = ({ setAuth }) => {
                 {/* Protected Routes */}
                 <Route path="/rooms" element={(user.role === 'OWNER' || user.role === 'ACCOUNTANT') ? <RoomSetup /> : <Navigate to="/" />} />
                 <Route path="/settings" element={user.role === 'OWNER' ? <Settings /> : <Navigate to="/" />} />
+                <Route path="/staff" element={user.role === 'OWNER' ? <Staff /> : <Navigate to="/" />} />
                 <Route path="/reports" element={(user.role === 'OWNER' || user.role === 'ACCOUNTANT') ? <Reports /> : <Navigate to="/" />} />
                 
                 <Route path="*" element={<Navigate to="/" />} />
