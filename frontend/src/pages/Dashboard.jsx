@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush, BarChart3, UsersRound, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush, BarChart3, UsersRound, FileText, ClipboardList, FileSearch, HardDriveDownload } from 'lucide-react';
 import Guests from './Guests';
 import Calendar from './Calendar';
 import Housekeeping from './Housekeeping';
@@ -11,6 +11,10 @@ import Settings from './Settings';
 import Reports from './Reports';
 import Staff from './Staff';
 import Quotations from './Quotations';
+import DailyReport from './DailyReport';
+import AuditLog from './AuditLog';
+import Backups from './Backups';
+import TopBar from '../components/TopBar';
 
 // Placeholder empty components for routing
 // Removed placeholders
@@ -61,7 +65,8 @@ const Dashboard = ({ setAuth }) => {
           <NavItem to="/billing" icon={ReceiptText} label="Billing & Folio" />
           <NavItem to="/quotations" icon={FileText} label="Quotations" />
           <NavItem to="/housekeeping" icon={Brush} label="Housekeeping" />
-          
+          <NavItem to="/daily-report" icon={ClipboardList} label="Daily Report" />
+
           {/* Restricted links */}
           {(user?.role === 'OWNER' || user?.role === 'ACCOUNTANT') && (
             <NavItem to="/rooms" icon={BedDouble} label="Room Setup" />
@@ -74,6 +79,12 @@ const Dashboard = ({ setAuth }) => {
         <div style={{ padding: '24px 12px', borderTop: '1px solid var(--border-light)' }}>
           {user?.role === 'OWNER' && (
             <NavItem to="/staff" icon={UsersRound} label="Staff" />
+          )}
+          {user?.role === 'OWNER' && (
+            <NavItem to="/audit" icon={FileSearch} label="Audit Log" />
+          )}
+          {user?.role === 'OWNER' && (
+            <NavItem to="/backups" icon={HardDriveDownload} label="Backups" />
           )}
           {user?.role === 'OWNER' && (
              <NavItem to="/settings" icon={ConfigIcon} label="Settings" />
@@ -90,17 +101,7 @@ const Dashboard = ({ setAuth }) => {
       </aside>
 
       <main className="main-content">
-        <header className="topbar">
-          <div>
-            <h2 style={{fontSize: '1.2rem', fontWeight: '500'}}>Reception Desk</h2>
-          </div>
-          <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-            <span style={{color: 'var(--text-muted)'}}>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-            <div style={{height: '35px', width: '35px', borderRadius: '50%', background: 'var(--accent-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 'bold'}}>
-              {user?.name?.charAt(0) || 'U'}
-            </div>
-          </div>
-        </header>
+        <TopBar user={user} onLogout={handleLogout} />
 
         <div className="content-area">
           <div className="glass-panel" style={{padding: '30px', minHeight: '600px'}}>
@@ -112,13 +113,16 @@ const Dashboard = ({ setAuth }) => {
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/quotations" element={<Quotations />} />
                 <Route path="/housekeeping" element={<Housekeeping />} />
-                
+                <Route path="/daily-report" element={<DailyReport />} />
+
                 {/* Protected Routes */}
                 <Route path="/rooms" element={(user.role === 'OWNER' || user.role === 'ACCOUNTANT') ? <RoomSetup /> : <Navigate to="/" />} />
                 <Route path="/settings" element={user.role === 'OWNER' ? <Settings /> : <Navigate to="/" />} />
                 <Route path="/staff" element={user.role === 'OWNER' ? <Staff /> : <Navigate to="/" />} />
+                <Route path="/audit" element={user.role === 'OWNER' ? <AuditLog /> : <Navigate to="/" />} />
+                <Route path="/backups" element={user.role === 'OWNER' ? <Backups /> : <Navigate to="/" />} />
                 <Route path="/reports" element={(user.role === 'OWNER' || user.role === 'ACCOUNTANT') ? <Reports /> : <Navigate to="/" />} />
-                
+
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             )}

@@ -115,6 +115,43 @@ const Calendar = () => {
     }
   };
 
+  const doTransfer = async () => {
+    if (!selected) return;
+    // Build a quick "Room X (Type)" list of currently vacant rooms
+    const candidates = rooms.filter(r => r.id !== selected.roomId && (r.status === 'VACANT_CLEAN' || r.status === 'VACANT_DIRTY'));
+    if (candidates.length === 0) return alert('No vacant rooms available to transfer into.');
+    const list = candidates.map((r, i) => `${i + 1}. Room ${r.number} (${r.type?.name || ''}) — ${r.status}`).join('\n');
+    const pick = window.prompt(`Transfer to which room?\n\n${list}\n\nEnter the number (1-${candidates.length}):`);
+    if (!pick) return;
+    const idx = parseInt(pick, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= candidates.length) return alert('Invalid choice.');
+    const room = candidates[idx];
+    const reason = window.prompt(`Move ${selected.guest?.firstName} to Room ${room.number}?\nReason for transfer:`) || '';
+    setBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API}/bookings/${selected.id}/transfer`, { newRoomId: room.id, reason }, { headers: { Authorization: `Bearer ${token}` } });
+      await refreshSelected(selected.id);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Transfer failed');
+      setBusy(false);
+    }
+  };
+
+  const doNoShow = async () => {
+    if (!selected) return;
+    if (!window.confirm(`Mark this booking as NO-SHOW? The room will be released.`)) return;
+    setBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API}/bookings/${selected.id}/no-show`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      await refreshSelected(selected.id);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to mark no-show');
+      setBusy(false);
+    }
+  };
+
   const doCancel = async () => {
     if (!selected) return;
     const reason = window.prompt(
@@ -169,6 +206,9 @@ const Calendar = () => {
   const canEdit = selected && (selected.status === 'CONFIRMED' || selected.status === 'CHECKED_IN');
   const canCheckIn = selected && selected.status === 'CONFIRMED';
   const canCancel = selected && selected.status === 'CONFIRMED';
+  const canTransfer = selected && selected.status === 'CHECKED_IN';
+  const canNoShow = selected && selected.status === 'CONFIRMED' &&
+    new Date(selected.checkInDate).getTime() < Date.now();
   const canViewFolio = selected && (selected.status === 'CHECKED_IN' || selected.status === 'CHECKED_OUT');
 
   return (
@@ -374,6 +414,20 @@ const Calendar = () => {
                     className="btn"
                     style={{ flex: '1 1 140px', background: 'var(--accent-gold)', color: '#1a1a1a' }}>
                     Open Folio / Billing
+                  </button>
+                )}
+                {canTransfer && (
+                  <button type="button" onClick={doTransfer} disabled={busy}
+                    className="btn"
+                    style={{ flex: '1 1 140px', background: '#3b82f6', color: '#fff' }}>
+                    Transfer Room
+                  </button>
+                )}
+                {canNoShow && (
+                  <button type="button" onClick={doNoShow} disabled={busy}
+                    className="btn"
+                    style={{ flex: '1 1 140px', background: 'rgba(245,158,11,0.2)', color: '#fcd34d', border: '1px solid #f59e0b' }}>
+                    Mark No-Show
                   </button>
                 )}
                 {canCancel && (

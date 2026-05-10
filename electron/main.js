@@ -391,6 +391,85 @@ function getPdfRoot() {
   return cfg.folder;
 }
 
+ipcMain.handle('melva:list-backups', async () => {
+  try {
+    const cfg = getBackupConfig();
+    if (!fs.existsSync(cfg.folder)) return { ok: true, folder: cfg.folder, items: [] };
+    const items = fs.readdirSync(cfg.folder)
+      .filter(f => /^hotel-.*\.db$/.test(f))
+      .map(f => {
+        const full = path.join(cfg.folder, f);
+        const st = fs.statSync(full);
+        return { name: f, path: full, size: st.size, mtimeMs: st.mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return { ok: true, folder: cfg.folder, items };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('melva:run-backup-now', async () => {
+  try {
+    runBackup();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Restore a backup: kill the server, archive current DB as a safety copy,
+// overwrite hotel.db with the chosen backup, restart the server.
+ipcMain.handle('melva:restore-backup', async (_evt, opts) => {
+  try {
+    const { fileName } = opts || {};
+    if (!fileName) return { ok: false, error: 'fileName is required' };
+    const cfg = getBackupConfig();
+    const src = path.join(cfg.folder, fileName);
+    if (!fs.existsSync(src)) return { ok: false, error: 'Backup file not found' };
+
+    const liveDb = dbPath();
+    // Make a safety copy of the live DB before we overwrite it
+    const safetyName = `hotel-pre-restore-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.db`;
+    const safety = path.join(cfg.folder, safetyName);
+    if (fs.existsSync(liveDb)) {
+      fs.mkdirSync(cfg.folder, { recursive: true });
+      fs.copyFileSync(liveDb, safety);
+    }
+
+    // Stop the server so SQLite isn't holding the DB
+    if (serverProcess) {
+      try { serverProcess.kill(); } catch (_) {}
+      serverProcess = null;
+    }
+
+    // Wait a beat for handles to release on Windows
+    await new Promise(r => setTimeout(r, 800));
+
+    fs.copyFileSync(src, liveDb);
+    // Also restore sidecars if they came with the backup
+    for (const ext of ['-journal', '-wal', '-shm']) {
+      const side = src + ext;
+      const target = liveDb + ext;
+      if (fs.existsSync(side)) fs.copyFileSync(side, target);
+      else if (fs.existsSync(target)) {
+        // remove stale sidecar that doesn't match restored DB
+        try { fs.unlinkSync(target); } catch (_) {}
+      }
+    }
+
+    log(`[restore] restored ${fileName} (pre-restore safety = ${safetyName})`);
+
+    // Restart server in the background
+    startServer();
+    // Don't await waitForServer — let renderer reload bookings on demand
+    return { ok: true, safetyCopy: safetyName };
+  } catch (err) {
+    log('[restore] error:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle('melva:save-pdf', async (_evt, opts) => {
   try {
     const { kind = 'document', number = String(Date.now()) } = opts || {};

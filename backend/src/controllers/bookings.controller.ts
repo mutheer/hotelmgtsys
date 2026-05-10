@@ -6,6 +6,18 @@ import { createAuditLog } from '../utils/audit';
 
 export const getBookings = async (req: AuthRequest, res: Response) => {
   try {
+    // Auto-flag CONFIRMED bookings as NO_SHOW once their check-in date passed
+    // by more than NO_SHOW_GRACE_HOURS (default 24h after check-in date).
+    try {
+      const setting = await prisma.settings.findUnique({ where: { key: 'NO_SHOW_GRACE_HOURS' } });
+      const graceHours = setting ? parseFloat(setting.value) : 24;
+      const cutoff = new Date(Date.now() - graceHours * 60 * 60 * 1000);
+      await prisma.booking.updateMany({
+        where: { status: 'CONFIRMED', checkInDate: { lt: cutoff } },
+        data: { status: 'NO_SHOW' }
+      });
+    } catch (_) { /* best-effort */ }
+
     const bookings = await prisma.booking.findMany({
       include: { guest: true, room: true },
       orderBy: { checkInDate: 'asc' }
@@ -292,6 +304,80 @@ export const cancelGroup = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
+};
+
+// Move a CHECKED_IN guest from their current room into another. Updates the
+// booking's roomId, both rooms' statuses, and writes a history entry for each
+// room. The destination room must be VACANT_CLEAN (or you can force).
+export const transferRoom = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const { newRoomId, reason } = req.body;
+        if (!newRoomId) return res.status(400).json({ error: 'newRoomId is required' });
+
+        const booking = await prisma.booking.findUnique({ where: { id } });
+        if (!booking) return res.status(404).json({ error: 'Booking not found' });
+        if (booking.status !== 'CHECKED_IN') {
+            return res.status(400).json({ error: 'Only checked-in bookings can be transferred' });
+        }
+        if (booking.roomId === newRoomId) {
+            return res.status(400).json({ error: 'Guest is already in that room' });
+        }
+
+        const newRoom = await prisma.room.findUnique({ where: { id: newRoomId } });
+        if (!newRoom) return res.status(404).json({ error: 'New room not found' });
+        if (['OCCUPIED_CLEAN', 'OCCUPIED_DIRTY'].includes(newRoom.status)) {
+            return res.status(400).json({ error: 'Destination room is currently occupied' });
+        }
+
+        // Check for any overlapping bookings on the new room for the remaining stay
+        const overlap = await prisma.booking.findFirst({
+            where: {
+                roomId: newRoomId,
+                id: { not: id },
+                status: { notIn: ['CANCELLED', 'NO_SHOW', 'CHECKED_OUT'] },
+                OR: [{ checkInDate: { lt: booking.checkOutDate }, checkOutDate: { gt: booking.checkInDate } }]
+            }
+        });
+        if (overlap) return res.status(400).json({ error: 'Destination room has a future booking that conflicts.' });
+
+        const oldRoomId = booking.roomId;
+        const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+            const updated = await tx.booking.update({ where: { id }, data: { roomId: newRoomId } });
+            if (oldRoomId) {
+                // Old room needs cleaning before re-use
+                await tx.room.update({ where: { id: oldRoomId }, data: { status: 'VACANT_DIRTY' } });
+                await tx.roomStatusHistory.create({ data: { roomId: oldRoomId, status: 'VACANT_DIRTY', changedBy: req.user!.id, reason: `Guest moved out (transfer): ${reason || 'no reason given'}` } });
+            }
+            await tx.room.update({ where: { id: newRoomId }, data: { status: 'OCCUPIED_CLEAN' } });
+            await tx.roomStatusHistory.create({ data: { roomId: newRoomId, status: 'OCCUPIED_CLEAN', changedBy: req.user!.id, reason: `Guest moved in (transfer): ${reason || 'no reason given'}` } });
+            return updated;
+        });
+
+        await createAuditLog(req.user!.id, 'TRANSFER_ROOM', 'Booking', id, { roomId: oldRoomId }, { roomId: newRoomId, reason });
+        res.json(result);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Mark a booking as NO_SHOW. Only allowed for CONFIRMED bookings past their
+// check-in date. Releases the room.
+export const markNoShow = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const booking = await prisma.booking.findUnique({ where: { id } });
+        if (!booking) return res.status(404).json({ error: 'Booking not found' });
+        if (booking.status !== 'CONFIRMED') {
+            return res.status(400).json({ error: `Cannot mark as no-show; status is ${booking.status}` });
+        }
+        const updated = await prisma.booking.update({ where: { id }, data: { status: 'NO_SHOW' } });
+        await createAuditLog(req.user!.id, 'MARK_NO_SHOW', 'Booking', id, booking, updated);
+        res.json(updated);
+    } catch {
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
 export const updateBooking = async (req: AuthRequest, res: Response) => {

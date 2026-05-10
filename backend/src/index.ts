@@ -12,6 +12,7 @@ import billingRoutes from './routes/billing.routes';
 import housekeepingRoutes from './routes/housekeeping.routes';
 import reportsRoutes from './routes/reports.routes';
 import quotationsRoutes from './routes/quotations.routes';
+import miscRoutes from './routes/misc.routes';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/housekeeping', housekeepingRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/quotations', quotationsRoutes);
+app.use('/api', miscRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

@@ -106,6 +106,30 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Self-service password change — any authenticated user can change THEIR
+// own password by providing the current one. Owners use updateUser for resets.
+export const changeMyPassword = async (req: AuthRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // A one-time setup route to create the very first owner account if no users exist
 export const setupOwner = async (req: Request, res: Response) => {
   try {
