@@ -101,24 +101,28 @@ const BookingModal = ({ isOpen, onClose, onBookingCreated }) => {
         <div className="form-grid">
           <div className="input-group">
             <label className="input-label">Check-In Date</label>
-            <input 
-              type="date" 
-              className="input-field" 
+            <input
+              type="date"
+              className="input-field"
               min={new Date().toISOString().split('T')[0]}
-              value={formData.checkInDate} 
-              onChange={e => setFormData({...formData, checkInDate: e.target.value})} 
-              required 
+              value={formData.checkInDate}
+              onChange={e => setFormData({...formData, checkInDate: e.target.value})}
+              onClick={e => e.target.showPicker?.()}
+              onFocus={e => e.target.showPicker?.()}
+              required
             />
           </div>
           <div className="input-group">
             <label className="input-label">Check-Out Date</label>
-            <input 
-              type="date" 
-              className="input-field" 
+            <input
+              type="date"
+              className="input-field"
               min={formData.checkInDate || new Date().toISOString().split('T')[0]}
-              value={formData.checkOutDate} 
-              onChange={e => setFormData({...formData, checkOutDate: e.target.value})} 
-              required 
+              value={formData.checkOutDate}
+              onChange={e => setFormData({...formData, checkOutDate: e.target.value})}
+              onClick={e => e.target.showPicker?.()}
+              onFocus={e => e.target.showPicker?.()}
+              required
             />
           </div>
         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { Search, PlusCircle, CreditCard, ChevronRight, Printer, Coffee, Shirt, Car, Tag } from 'lucide-react';
+import { Search, PlusCircle, CreditCard, ChevronRight, Printer, Coffee, Shirt, Car, Tag, Trash2, Percent, Receipt } from 'lucide-react';
 import PaymentModal from '../components/PaymentModal';
 
 const API = 'http://localhost:5000/api';
@@ -12,6 +13,7 @@ const QUICK_SERVICES = [
 ];
 
 const Billing = () => {
+  const location = useLocation();
   const [bookingId, setBookingId] = useState('');
   const [folio, setFolio] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -20,6 +22,7 @@ const Billing = () => {
   const [settings, setSettings] = useState({});
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
+  const [printDoc, setPrintDoc] = useState(null); // last-issued document being previewed for print
 
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
@@ -30,12 +33,22 @@ const Billing = () => {
       .catch(() => {});
   }, []);
 
-  const fetchFolio = async () => {
-    if (!bookingId) return;
+  // If we arrived from the Calendar with ?bookingId=..., auto-load the folio
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('bookingId');
+    if (id) {
+      setBookingId(id);
+      fetchFolioFor(id);
+    }
+  }, [location.search]);
+
+  const fetchFolioFor = async (id) => {
+    if (!id) return;
     setIsLoading(true);
     setError('');
     try {
-      const res = await axios.get(`${API}/billing/${bookingId}`, { headers });
+      const res = await axios.get(`${API}/billing/${id}`, { headers });
       setFolio(res.data);
     } catch {
       setError('Folio not found or booking ID invalid.');
@@ -44,6 +57,8 @@ const Billing = () => {
       setIsLoading(false);
     }
   };
+
+  const fetchFolio = () => fetchFolioFor(bookingId);
 
   const handleAddService = async (e, quickDesc = null, quickAmt = null) => {
     if (e) e.preventDefault();
@@ -68,6 +83,84 @@ const Billing = () => {
     handleAddService(null, svc.label, price);
   };
 
+  const isOpenFolio = folio?.status === 'OPEN';
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const canDiscount = user.role === 'OWNER' || user.role === 'ACCOUNTANT';
+
+  // Tourism levy: per-person-per-night charge. Settings.TOURISM_LEVY_RATE,
+  // default P10. Asks for guests, multiplies by nights from the booking.
+  const addTourismLevy = async () => {
+    if (!folio) return;
+    const rate = parseFloat(settings.TOURISM_LEVY_RATE) || 10;
+    const nights = folio.nights || 1;
+    const guestsStr = window.prompt(`Tourism Levy at P${rate.toFixed(2)} per person per night for ${nights} night${nights > 1 ? 's' : ''}.\nHow many guests?`, '2');
+    if (!guestsStr) return;
+    const guests = parseInt(guestsStr, 10);
+    if (!Number.isFinite(guests) || guests < 1) return alert('Please enter a valid guest count.');
+    const qty = guests * nights;
+    try {
+      await axios.post(`${API}/billing/service`, {
+        folioId: folio.id,
+        description: 'LEVY',
+        quantity: qty,
+        unitPrice: rate
+      }, { headers });
+      fetchFolio();
+    } catch {
+      alert('Failed to add levy');
+    }
+  };
+
+  // Discount: OWNER/ACCOUNTANT only. Adds a Discount row that is deducted
+  // from the calculated balance.
+  const addDiscount = async () => {
+    if (!folio) return;
+    const amountStr = window.prompt('Discount amount (P)?');
+    if (!amountStr) return;
+    const amt = parseFloat(amountStr);
+    if (!Number.isFinite(amt) || amt <= 0) return alert('Please enter a valid amount.');
+    const reason = window.prompt('Reason for discount? (required for audit)');
+    if (!reason) return alert('A reason is required.');
+    try {
+      await axios.post(`${API}/billing/discount`, {
+        folioId: folio.id, amount: amt, reason
+      }, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to add discount');
+    }
+  };
+
+  const handleRemoveDiscount = async (d) => {
+    if (!window.confirm(`Remove discount of P${d.amount.toFixed(2)} (${d.reason})?`)) return;
+    try {
+      await axios.delete(`${API}/billing/discount/${d.id}`, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to remove discount');
+    }
+  };
+
+  const handleRemoveCharge = async (charge) => {
+    if (!window.confirm(`Remove "${charge.description}" (P${charge.amount.toFixed(2)})?`)) return;
+    try {
+      await axios.delete(`${API}/billing/service/${charge.id}`, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to remove charge');
+    }
+  };
+
+  const handleRemovePayment = async (payment) => {
+    if (!window.confirm(`Remove this ${payment.method.replace('_', ' ')} payment of P${payment.amount.toFixed(2)}?`)) return;
+    try {
+      await axios.delete(`${API}/billing/payment/${payment.id}`, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to remove payment');
+    }
+  };
+
   const handleCheckout = async () => {
     if (folio.calculatedBalance > 0) {
       alert(`Cannot checkout. Outstanding balance of P${folio.calculatedBalance.toFixed(2)} must be cleared first.`);
@@ -87,6 +180,31 @@ const Billing = () => {
   const handlePrint = () => {
     window.print();
   };
+
+  const issueAndPrint = async () => {
+    if (!folio) return;
+    try {
+      const res = await axios.post(`${API}/billing/${folio.id}/documents`, {}, { headers });
+      setPrintDoc(res.data);
+      // Let the print block mount first
+      setTimeout(async () => {
+        if (window.melvaApi?.saveDocumentPdf) {
+          const kind = res.data.type === 'RECEIPT' ? 'receipts' : 'invoices';
+          const saved = await window.melvaApi.saveDocumentPdf({ kind, number: res.data.invoiceNum });
+          if (saved?.ok) {
+            console.log('PDF saved to', saved.path);
+          } else {
+            console.warn('PDF save failed:', saved?.error);
+          }
+        }
+        window.print();
+      }, 250);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to issue document');
+    }
+  };
+
+  const documentLabel = folio && folio.calculatedBalance <= 0.0001 ? 'Receipt' : 'Invoice';
 
   if (!folio) {
     return (
@@ -123,8 +241,8 @@ const Billing = () => {
         <button className="btn" onClick={() => setFolio(null)} style={{ background: 'rgba(255,255,255,0.05)' }}>
           &larr; Back to Search
         </button>
-        <button className="btn" onClick={handlePrint} style={{ background: 'rgba(255,255,255,0.05)' }}>
-          <Printer size={16} /> Print Invoice
+        <button className="btn" onClick={issueAndPrint} style={{ background: 'var(--accent-gold)', color: '#1a1a1a' }}>
+          <Printer size={16} /> Issue & Print {documentLabel}
         </button>
       </div>
 
@@ -178,8 +296,32 @@ const Billing = () => {
                 {folio.services.map(s => (
                   <tr key={s.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <td style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(s.date).toLocaleDateString('en-GB')}</td>
-                    <td style={{ padding: '12px 0' }}>{s.description}</td>
-                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold' }}>P{s.amount.toFixed(2)}</td>
+                    <td style={{ padding: '12px 0' }}>
+                      {s.description}
+                    </td>
+                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
+                        P{s.amount.toFixed(2)}
+                        {isOpenFolio && (
+                          <button
+                            type="button"
+                            className="no-print"
+                            onClick={() => handleRemoveCharge(s)}
+                            title="Remove this charge"
+                            style={{
+                              all: 'unset', cursor: 'pointer', padding: '4px',
+                              borderRadius: '4px', color: '#ef4444',
+                              display: 'inline-flex', alignItems: 'center',
+                              transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </span>
+                    </td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: '2px solid var(--border-light)', fontWeight: 'bold' }}>
@@ -189,6 +331,33 @@ const Billing = () => {
               </tbody>
             </table>
 
+            {folio.discounts && folio.discounts.length > 0 && (
+              <>
+                <h4 style={{ marginBottom: '15px' }}>Discounts</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+                  <tbody>
+                    {folio.discounts.map(d => (
+                      <tr key={d.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '10px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(d.createdAt).toLocaleDateString('en-GB')}</td>
+                        <td style={{ padding: '10px 0' }}>{d.reason}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 'bold', color: '#c4b5fd' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
+                            -P{d.amount.toFixed(2)}
+                            {isOpenFolio && canDiscount && (
+                              <button type="button" className="no-print" onClick={() => handleRemoveDiscount(d)} title="Remove discount"
+                                style={{ all: 'unset', cursor: 'pointer', padding: '4px', borderRadius: '4px', color: '#ef4444', display: 'inline-flex', alignItems: 'center' }}>
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+
             <h4 style={{ marginBottom: '15px' }}>Payments Applied</h4>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
@@ -196,7 +365,29 @@ const Billing = () => {
                   <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <td style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(p.createdAt).toLocaleDateString('en-GB')}</td>
                     <td style={{ padding: '12px 0' }}>{p.method.replace('_', ' ')}{p.reference ? ` (${p.reference})` : ''}</td>
-                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold', color: '#22c55e' }}>-P{p.amount.toFixed(2)}</td>
+                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold', color: '#22c55e' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
+                        -P{p.amount.toFixed(2)}
+                        {isOpenFolio && (
+                          <button
+                            type="button"
+                            className="no-print"
+                            onClick={() => handleRemovePayment(p)}
+                            title="Remove this payment"
+                            style={{
+                              all: 'unset', cursor: 'pointer', padding: '4px',
+                              borderRadius: '4px', color: '#ef4444',
+                              display: 'inline-flex', alignItems: 'center',
+                              transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </span>
+                    </td>
                   </tr>
                 ))}
                 {folio.payments.length === 0 && (
@@ -219,6 +410,16 @@ const Billing = () => {
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>P{parseFloat(settings[svc.settingKey] || svc.defaultAmt).toFixed(2)}</span>
                   </button>
                 ))}
+                <button onClick={addTourismLevy} className="btn" style={{ background: 'rgba(212,175,55,0.10)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', justifyContent: 'space-between', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Receipt size={14} /> Tourism Levy</span>
+                  <span style={{ fontSize: '0.85rem' }}>P{(parseFloat(settings.TOURISM_LEVY_RATE) || 10).toFixed(2)} / pp / night</span>
+                </button>
+                {canDiscount && (
+                  <button onClick={addDiscount} className="btn" style={{ background: 'rgba(168,85,247,0.10)', border: '1px solid #a855f7', color: '#c4b5fd', justifyContent: 'space-between', display: 'flex', alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Percent size={14} /> Apply Discount</span>
+                    <span style={{ fontSize: '0.85rem' }}>{user.role === 'OWNER' ? 'Owner' : 'Accountant'} only</span>
+                  </button>
+                )}
               </div>
 
               <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -267,22 +468,135 @@ const Billing = () => {
         onPaymentReceived={fetchFolio}
       />
 
-      {/* Print styles injected inline */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #invoice-print, #invoice-print * { visibility: visible; }
-          #invoice-print { position: absolute; top: 0; left: 0; width: 100%; color: #000 !important; background: #fff !important; }
-          .no-print { display: none !important; }
-          .print-only { display: block !important; }
-          .glass-panel { background: transparent !important; border: 1px solid #ccc !important; box-shadow: none !important; }
-          table { border-collapse: collapse; }
-          td, th { color: #000 !important; }
-        }
-        @media screen {
-          .print-only { display: none; }
-        }
-      `}</style>
+      {/* Print-only document — strict layout matching The Melva's receipt template */}
+      {printDoc && (
+        <div className="print-only print-doc-wrapper">
+          <div className="print-doc">
+
+            {/* ── Header: 3 columns — logo | name+address | label+meta ── */}
+            <table style={{ marginBottom: '4px', tableLayout: 'fixed' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '22%', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <img
+                      src="/melva-logo.png"
+                      alt=""
+                      style={{ maxWidth: '130px', maxHeight: '110px', objectFit: 'contain' }}
+                      onError={e => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  </td>
+                  <td style={{ verticalAlign: 'top', textAlign: 'center' }}>
+                    <div style={{ fontSize: '15pt', fontWeight: 700, lineHeight: '1.25' }}>
+                      THE MELVA ELEGANT<br />BOUTIQUE GUEST HOUSE
+                    </div>
+                    <div style={{ marginTop: '14px', fontSize: '10pt', lineHeight: '1.5' }}>
+                      PLOT 34912, BLOCK 8<br />
+                      GABORONE, BOTSWANA<br />
+                      Tel:+267 3119162/ 75010066
+                    </div>
+                  </td>
+                  <td style={{ width: '32%', verticalAlign: 'top', textAlign: 'right' }}>
+                    <div style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '14px' }}>
+                      {printDoc.type}
+                    </div>
+                    <table style={{ marginLeft: 'auto', fontSize: '10pt' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ fontWeight: 600, paddingRight: '14px' }}>{printDoc.type} NO.</td>
+                          <td style={{ fontWeight: 700, textAlign: 'right' }}>{printDoc.invoiceNum}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ fontWeight: 600, paddingRight: '14px' }}>DATE</td>
+                          <td style={{ fontWeight: 700, textAlign: 'right' }}>{new Date(printDoc.createdAt).toLocaleDateString('en-GB')}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ fontWeight: 600, paddingRight: '14px' }}>CHECK IN</td>
+                          <td style={{ fontWeight: 700, textAlign: 'right' }}>{new Date(folio.booking.checkInDate).toLocaleDateString('en-GB')}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ fontWeight: 600, paddingRight: '14px' }}>CHECK OUT</td>
+                          <td style={{ fontWeight: 700, textAlign: 'right' }}>{new Date(folio.booking.checkOutDate).toLocaleDateString('en-GB')}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Black rule under the address block */}
+            <div style={{ borderBottom: '1.5px solid #000', margin: '4px 0 18px' }} />
+
+            {/* Guest details */}
+            <div style={{ marginBottom: '4px', fontSize: '10pt' }}>Guest Details:</div>
+            <div style={{ marginBottom: '4px', fontWeight: 700, textTransform: 'uppercase', borderBottom: '1px solid #000', paddingBottom: '4px' }}>
+              {guest?.firstName} {guest?.lastName}
+            </div>
+            <div style={{ borderBottom: '1px solid #000', paddingBottom: '4px', height: '16px', marginBottom: '4px' }} />
+            <div style={{ borderBottom: '1px solid #000', paddingBottom: '4px', height: '16px', marginBottom: '24px' }} />
+
+            {/* Charges table */}
+            <table className="doc-table" style={{ marginBottom: '0' }}>
+              <thead>
+                <tr style={{ background: '#e8e8e8' }}>
+                  <th style={{ width: '14%' }}>Date</th>
+                  <th>Name</th>
+                  <th style={{ textAlign: 'right', width: '12%' }}>Qty.</th>
+                  <th style={{ textAlign: 'right', width: '15%' }}>Unit Price</th>
+                  <th style={{ textAlign: 'right', width: '15%' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {printDoc.lineItems.map((li, i) => (
+                  <tr key={i}>
+                    <td>{new Date(li.date).toLocaleDateString('en-GB')}</td>
+                    <td>{li.description}</td>
+                    <td style={{ textAlign: 'right' }}>{li.qty}{li.unit ? ` ${li.unit}${li.qty > 1 ? 's' : ''}` : ''}</td>
+                    <td style={{ textAlign: 'right' }}>{li.unitPrice.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right' }}>{li.amount.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Totals — right aligned */}
+            <table className="totals" style={{ width: 'auto', marginLeft: 'auto', marginTop: '8px', fontSize: '10pt' }}>
+              <tbody>
+                <tr>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>Net total</td>
+                  <td style={{ textAlign: 'right', paddingLeft: '60px', fontWeight: 700 }}>{printDoc.subtotal.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>Discount</td>
+                  <td style={{ textAlign: 'right', paddingLeft: '60px', fontWeight: 700 }}>{printDoc.discount.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>VAT</td>
+                  <td style={{ textAlign: 'right', paddingLeft: '60px', fontWeight: 700 }}>{printDoc.vat.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>Total amount</td>
+                  <td style={{ textAlign: 'right', paddingLeft: '60px', fontWeight: 700 }}>{printDoc.totalAmount.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>Paid amount</td>
+                  <td style={{ textAlign: 'right', paddingLeft: '60px', fontWeight: 700 }}>{printDoc.paidAmount.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>Balance Due</td>
+                  <td style={{ textAlign: 'right', paddingLeft: '60px', fontWeight: 700 }}>{printDoc.balanceDue.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style={{ marginTop: '50px', textAlign: 'center', fontSize: '10pt' }}>
+              {printDoc.type === 'RECEIPT'
+                ? 'Thank you for staying with us, we hope to have you again with us.'
+                : 'Please settle the balance due at your earliest convenience. Thank you.'}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

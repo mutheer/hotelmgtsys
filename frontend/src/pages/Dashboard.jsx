@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush, BarChart3, UsersRound } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, BedDouble, ReceiptText, Settings as ConfigIcon, LogOut, Brush, BarChart3, UsersRound, FileText } from 'lucide-react';
 import Guests from './Guests';
 import Calendar from './Calendar';
 import Housekeeping from './Housekeeping';
@@ -10,6 +10,7 @@ import RoomSetup from './RoomSetup';
 import Settings from './Settings';
 import Reports from './Reports';
 import Staff from './Staff';
+import Quotations from './Quotations';
 
 // Placeholder empty components for routing
 // Removed placeholders
@@ -43,8 +44,14 @@ const Dashboard = ({ setAuth }) => {
   return (
     <div className="app-layout animate-fade-in">
       <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="brand-text">The Melva</div>
+        <div className="sidebar-header" style={{ textAlign: 'center' }}>
+          <img
+            src="/melva-logo.png"
+            alt="The Melva"
+            style={{ width: '90px', height: 'auto', display: 'block', margin: '0 auto 8px' }}
+            onError={e => { e.currentTarget.style.display = 'none'; }}
+          />
+          <div className="brand-text" style={{ fontSize: '1rem', letterSpacing: '1px' }}>THE MELVA</div>
         </div>
         
         <nav className="nav-links">
@@ -52,6 +59,7 @@ const Dashboard = ({ setAuth }) => {
           <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
           <NavItem to="/guests" icon={Users} label="Guests" />
           <NavItem to="/billing" icon={ReceiptText} label="Billing & Folio" />
+          <NavItem to="/quotations" icon={FileText} label="Quotations" />
           <NavItem to="/housekeeping" icon={Brush} label="Housekeeping" />
           
           {/* Restricted links */}
@@ -102,6 +110,7 @@ const Dashboard = ({ setAuth }) => {
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/guests" element={<Guests />} />
                 <Route path="/billing" element={<Billing />} />
+                <Route path="/quotations" element={<Quotations />} />
                 <Route path="/housekeeping" element={<Housekeeping />} />
                 
                 {/* Protected Routes */}

@@ -11,6 +11,7 @@ import bookingsRoutes from './routes/bookings.routes';
 import billingRoutes from './routes/billing.routes';
 import housekeepingRoutes from './routes/housekeeping.routes';
 import reportsRoutes from './routes/reports.routes';
+import quotationsRoutes from './routes/quotations.routes';
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use('/api/bookings', bookingsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/housekeeping', housekeepingRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/quotations', quotationsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -48,6 +50,7 @@ if (isProd) {
   }
 }
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
 });

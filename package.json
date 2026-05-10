@@ -29,7 +29,9 @@
     },
     "files": [
       "electron/main.js",
-      "electron/loading.html"
+      "electron/preload.js",
+      "electron/loading.html",
+      "electron/assets/**/*"
     ],
     "extraResources": [
       {

@@ -135,6 +135,7 @@ model Booking {
   depositPaid    Float         @default(0)
   isBlock        Boolean       @default(false)
   notes          String?
+  groupId        String?       // If part of a BookingGroup (wedding, conference, etc.)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -176,7 +177,9 @@ model ServiceCharge {
   id          String   @id @default(uuid())
   folioId     String
   description String   // e.g., 'Breakfast', 'Laundry - 2 shirts'
-  amount      Float
+  quantity    Float    @default(1)
+  unitPrice   Float    @default(0)
+  amount      Float    // = quantity * unitPrice (denormalized for fast reporting)
   date        DateTime @default(now())
 
   folio       Folio    @relation(fields: [folioId], references: [id])
@@ -211,6 +214,15 @@ model Invoice {
   id          String   @id @default(uuid())
   folioId     String
   invoiceNum  String   @unique
+  type        String   @default("INVOICE")  // INVOICE or RECEIPT
+  subtotal    Float    @default(0)
+  discount    Float    @default(0)
+  vat         Float    @default(0)
+  totalAmount Float    @default(0)
+  paidAmount  Float    @default(0)
+  balanceDue  Float    @default(0)
+  lineItems   String   @default("[]")  // JSON array of line items
+  issuedById  String?
   pdfUrl      String?  // Path to generated PDF
   createdAt   DateTime @default(now())
 
@@ -260,4 +272,35 @@ model Settings {
   key         String   @unique
   value       String   // JSON string or plain text depending on key
   updatedAt   DateTime @updatedAt
+}
+
+model BookingGroup {
+  id            String   @id @default(uuid())
+  name          String   // e.g. "Mokoena Wedding"
+  organizerId   String   // Guest who is the contact / payer
+  source        String
+  notes         String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Quotation {
+  id            String   @id @default(uuid())
+  quoteNumber   String   @unique
+  date          DateTime
+  clientName    String
+  clientTel     String?
+  clientEmail   String?
+  clientAddress String?
+  lineItems     String   @default("[]")  // JSON array
+  notes         String?
+  bankDetails   String?  // JSON object snapshot at issue time
+  subtotal      Float    @default(0)
+  vatPct        Float    @default(12)
+  vatAmount     Float    @default(0)
+  total         Float    @default(0)
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

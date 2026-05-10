@@ -116,12 +116,14 @@ const GuestModal = ({ isOpen, onClose, onGuestCreated, initialData = null }) => 
         <div className="form-grid">
           <div className="input-group">
             <label className="input-label">Date of Birth</label>
-            <input 
-              type="date" 
-              className="input-field" 
-              value={formData.dob} 
-              onChange={e => setFormData({...formData, dob: e.target.value})} 
-              required 
+            <input
+              type="date"
+              className="input-field"
+              value={formData.dob}
+              onChange={e => setFormData({...formData, dob: e.target.value})}
+              onClick={e => e.target.showPicker?.()}
+              onFocus={e => e.target.showPicker?.()}
+              required
             />
           </div>
           <div className="input-group">

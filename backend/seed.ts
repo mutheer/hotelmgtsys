@@ -62,6 +62,7 @@ async function main() {
     { key: 'SERVICE_BREAKFAST_PRICE', value: '100' },
     { key: 'SERVICE_LAUNDRY_PRICE', value: '80' },
     { key: 'SERVICE_AIRPORT_TRANSFER_PRICE', value: '150' },
+    { key: 'TOURISM_LEVY_RATE', value: '10' },
     { key: 'DEPOSIT_PERCENTAGE', value: '20' },
     { key: 'LARGE_BOOKING_THRESHOLD_NIGHTS', value: '5' }
   ];

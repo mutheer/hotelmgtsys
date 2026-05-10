@@ -55,11 +55,11 @@ const Reports = () => {
       <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: 'var(--text-muted)' }}>From</span>
-          <input type="date" className="input-field" value={from} onChange={e => setFrom(e.target.value)} style={{ padding: '6px 12px' }} />
+          <input type="date" className="input-field" value={from} onChange={e => setFrom(e.target.value)} onClick={e => e.target.showPicker?.()} onFocus={e => e.target.showPicker?.()} style={{ padding: '6px 12px' }} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: 'var(--text-muted)' }}>To</span>
-          <input type="date" className="input-field" value={to} onChange={e => setTo(e.target.value)} style={{ padding: '6px 12px' }} />
+          <input type="date" className="input-field" value={to} onChange={e => setTo(e.target.value)} onClick={e => e.target.showPicker?.()} onFocus={e => e.target.showPicker?.()} style={{ padding: '6px 12px' }} />
         </div>
         <button className="btn btn-primary" onClick={fetchReports} disabled={isLoading}>
           {isLoading ? 'Loading...' : 'Run Report'}

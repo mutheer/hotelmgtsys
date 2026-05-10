@@ -34,8 +34,14 @@ const Login = ({ setAuth }) => {
   return (
     <div className="auth-layout">
       <div className="glass-panel login-card animate-fade-in">
-        <div className="login-header">
-          <div className="login-logo">The Melva</div>
+        <div className="login-header" style={{ textAlign: 'center' }}>
+          <img
+            src="/melva-logo.png"
+            alt="The Melva"
+            style={{ width: '120px', height: 'auto', margin: '0 auto 12px', display: 'block' }}
+            onError={e => { e.currentTarget.style.display = 'none'; }}
+          />
+          <div className="login-logo" style={{ fontSize: '1.4rem', letterSpacing: '2px' }}>THE MELVA</div>
           <p className="login-subtitle">Elegant Guest House PMS</p>
         </div>
 

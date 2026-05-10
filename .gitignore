@@ -23,3 +23,5 @@ backend/.env
 # OS
 .DS_Store
 Thumbs.db
+# Claude Code workspace files
+.claude/
