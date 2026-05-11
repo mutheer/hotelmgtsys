@@ -102,20 +102,19 @@ const GuestModal = ({ isOpen, onClose, onGuestCreated, initialData = null }) => 
             </select>
           </div>
           <div className="input-group">
-            <label className="input-label">ID Number</label>
-            <input 
-              type="text" 
-              className="input-field" 
-              value={formData.idNumber} 
-              onChange={e => setFormData({...formData, idNumber: e.target.value})} 
-              required 
+            <label className="input-label">ID Number (Optional)</label>
+            <input
+              type="text"
+              className="input-field"
+              value={formData.idNumber}
+              onChange={e => setFormData({...formData, idNumber: e.target.value})}
             />
           </div>
         </div>
 
         <div className="form-grid">
           <div className="input-group">
-            <label className="input-label">Date of Birth</label>
+            <label className="input-label">Date of Birth (Optional)</label>
             <input
               type="date"
               className="input-field"
@@ -123,7 +122,6 @@ const GuestModal = ({ isOpen, onClose, onGuestCreated, initialData = null }) => 
               onChange={e => setFormData({...formData, dob: e.target.value})}
               onClick={e => e.target.showPicker?.()}
               onFocus={e => e.target.showPicker?.()}
-              required
             />
           </div>
           <div className="input-group">

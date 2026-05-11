@@ -300,7 +300,7 @@ const Billing = () => {
                       {s.description}
                     </td>
                     <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', justifyContent: 'flex-end' }}>
                         P{s.amount.toFixed(2)}
                         {isOpenFolio && (
                           <button
@@ -309,15 +309,18 @@ const Billing = () => {
                             onClick={() => handleRemoveCharge(s)}
                             title="Remove this charge"
                             style={{
-                              all: 'unset', cursor: 'pointer', padding: '4px',
-                              borderRadius: '4px', color: '#ef4444',
-                              display: 'inline-flex', alignItems: 'center',
-                              transition: 'background 0.15s'
+                              cursor: 'pointer',
+                              background: 'rgba(239,68,68,0.12)',
+                              border: '1px solid rgba(239,68,68,0.35)',
+                              color: '#ef4444',
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              lineHeight: 1
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </span>
@@ -341,12 +344,12 @@ const Billing = () => {
                         <td style={{ padding: '10px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(d.createdAt).toLocaleDateString('en-GB')}</td>
                         <td style={{ padding: '10px 0' }}>{d.reason}</td>
                         <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 'bold', color: '#c4b5fd' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', justifyContent: 'flex-end' }}>
                             -P{d.amount.toFixed(2)}
                             {isOpenFolio && canDiscount && (
                               <button type="button" className="no-print" onClick={() => handleRemoveDiscount(d)} title="Remove discount"
-                                style={{ all: 'unset', cursor: 'pointer', padding: '4px', borderRadius: '4px', color: '#ef4444', display: 'inline-flex', alignItems: 'center' }}>
-                                <Trash2 size={14} />
+                                style={{ cursor: 'pointer', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#ef4444', padding: '6px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
+                                <Trash2 size={16} />
                               </button>
                             )}
                           </span>
@@ -366,7 +369,7 @@ const Billing = () => {
                     <td style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(p.createdAt).toLocaleDateString('en-GB')}</td>
                     <td style={{ padding: '12px 0' }}>{p.method.replace('_', ' ')}{p.reference ? ` (${p.reference})` : ''}</td>
                     <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold', color: '#22c55e' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', justifyContent: 'flex-end' }}>
                         -P{p.amount.toFixed(2)}
                         {isOpenFolio && (
                           <button
@@ -375,15 +378,18 @@ const Billing = () => {
                             onClick={() => handleRemovePayment(p)}
                             title="Remove this payment"
                             style={{
-                              all: 'unset', cursor: 'pointer', padding: '4px',
-                              borderRadius: '4px', color: '#ef4444',
-                              display: 'inline-flex', alignItems: 'center',
-                              transition: 'background 0.15s'
+                              cursor: 'pointer',
+                              background: 'rgba(239,68,68,0.12)',
+                              border: '1px solid rgba(239,68,68,0.35)',
+                              color: '#ef4444',
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              lineHeight: 1
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </span>

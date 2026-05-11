@@ -13,7 +13,8 @@ const BookingModal = ({ isOpen, onClose, onBookingCreated }) => {
     checkInDate: '',
     checkOutDate: '',
     roomId: '',
-    source: '', // Mandatory
+    roomTypeId: '',     // required by the backend; filled when a room is picked
+    source: '',         // mandatory
     notes: '',
     depositPaid: '0'
   });
@@ -130,10 +131,14 @@ const BookingModal = ({ isOpen, onClose, onBookingCreated }) => {
         <div className="form-grid">
           <div className="input-group">
             <label className="input-label">Available Rooms</label>
-            <select 
-              className="input-field" 
-              value={formData.roomId} 
-              onChange={e => setFormData({...formData, roomId: e.target.value})}
+            <select
+              className="input-field"
+              value={formData.roomId}
+              onChange={e => {
+                const id = e.target.value;
+                const room = rooms.find(r => r.id === id);
+                setFormData({ ...formData, roomId: id, roomTypeId: room?.roomTypeId || '' });
+              }}
               required
               disabled={rooms.length === 0}
             >
