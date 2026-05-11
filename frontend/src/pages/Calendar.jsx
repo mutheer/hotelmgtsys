@@ -96,6 +96,7 @@ const Calendar = () => {
       await refreshSelected(selected.id);
     } catch (err) {
       alert(err.response?.data?.error || 'Update failed');
+    } finally {
       setBusy(false);
     }
   };
@@ -109,8 +110,13 @@ const Calendar = () => {
       await axios.post(`${API}/bookings/${selected.id}/checkin`, {},
         { headers: { Authorization: `Bearer ${token}` } });
       await refreshSelected(selected.id);
+      // Jump straight to the folio after a successful check-in
+      const id = selected.id;
+      closeBooking();
+      navigate(`/billing?bookingId=${id}`);
     } catch (err) {
       alert(err.response?.data?.error || 'Check-in failed');
+    } finally {
       setBusy(false);
     }
   };
@@ -134,6 +140,7 @@ const Calendar = () => {
       await refreshSelected(selected.id);
     } catch (err) {
       alert(err.response?.data?.error || 'Transfer failed');
+    } finally {
       setBusy(false);
     }
   };
@@ -148,6 +155,7 @@ const Calendar = () => {
       await refreshSelected(selected.id);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to mark no-show');
+    } finally {
       setBusy(false);
     }
   };
@@ -169,6 +177,7 @@ const Calendar = () => {
       await refreshSelected(selected.id);
     } catch (err) {
       alert(err.response?.data?.error || 'Cancellation failed');
+    } finally {
       setBusy(false);
     }
   };

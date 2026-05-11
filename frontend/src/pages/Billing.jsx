@@ -289,7 +289,10 @@ const Billing = () => {
                   <td style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(folio.booking.checkInDate).toLocaleDateString('en-GB')}</td>
                   <td style={{ padding: '12px 0' }}>
                     Room {room?.number} — Accommodation
-                    <small style={{ color: 'var(--text-muted)', display: 'block' }}>{folio.nights} night{folio.nights !== 1 ? 's' : ''} × P{folio.ratePerNight?.toFixed(2)} ({room?.type?.name})</small>
+                    <small style={{ color: 'var(--text-muted)', display: 'block' }}>
+                      {folio.nights} night{folio.nights !== 1 ? 's' : ''} × P{folio.ratePerNight?.toFixed(2)} ({room?.type?.name})
+                      <em style={{ marginLeft: '8px', opacity: 0.7 }}>— auto from dates, edit dates to change</em>
+                    </small>
                   </td>
                   <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold' }}>P{folio.roomBaseCharge?.toFixed(2)}</td>
                 </tr>
