@@ -254,12 +254,10 @@ function waitForServer(maxMs = 30000) {
     const deadline = Date.now() + maxMs;
     const attempt = () => {
       const req = http.get(`http://127.0.0.1:${PORT}/api/health`, res => {
-        if (res.statusCode === 200) {
-          res.resume();
-          return resolve();
-        }
+        // Any HTTP response — even 401/404 — means the server is reachable.
+        // We only retry on connection errors / timeouts.
         res.resume();
-        tryAgain();
+        return resolve();
       });
       req.on('error', tryAgain);
       req.setTimeout(800, () => { req.destroy(); tryAgain(); });
