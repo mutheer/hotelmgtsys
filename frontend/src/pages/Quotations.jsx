@@ -31,6 +31,7 @@ const blankForm = () => ({
   lineItems: [emptyLine()],
   notes: DEFAULT_NOTES,
   vatPct: 12,
+  discount: 0,
   bankDetails: { ...DEFAULT_BANK }
 });
 
@@ -72,6 +73,7 @@ const Quotations = () => {
       lineItems: q.lineItems.length ? q.lineItems : [emptyLine()],
       notes: q.notes || '',
       vatPct: q.vatPct,
+      discount: q.discount || 0,
       bankDetails: q.bankDetails || { ...DEFAULT_BANK }
     });
     setEditingId(q.id);
@@ -100,9 +102,11 @@ const Quotations = () => {
 
   const totals = () => {
     const subtotal = form.lineItems.reduce((s, li) => s + (Number(li.total) || 0), 0);
-    const vatAmount = +(subtotal * (form.vatPct / 100)).toFixed(2);
-    const total = +(subtotal + vatAmount).toFixed(2);
-    return { subtotal: +subtotal.toFixed(2), vatAmount, total };
+    const discount = Math.min(Math.max(0, Number(form.discount) || 0), subtotal);
+    const taxable = subtotal - discount;
+    const vatAmount = +(taxable * (form.vatPct / 100)).toFixed(2);
+    const total = +(taxable + vatAmount).toFixed(2);
+    return { subtotal: +subtotal.toFixed(2), discount: +discount.toFixed(2), vatAmount, total };
   };
 
   const save = async () => {
@@ -316,6 +320,17 @@ const Quotations = () => {
                     <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: 700 }}>P{t.subtotal.toFixed(2)}</td></tr>
                 <tr>
                   <td style={{ padding: '4px 12px', textAlign: 'right' }}>
+                    Discount (P)
+                    <input type="number" step="0.01" min="0" value={form.discount}
+                      onChange={e => setForm({ ...form, discount: parseFloat(e.target.value) || 0 })}
+                      style={{ width: '80px', marginLeft: '8px', padding: '4px 6px', background: 'rgba(168,85,247,0.10)', border: '1px solid #a855f7', borderRadius: '4px', color: 'inherit' }} />
+                  </td>
+                  <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: 700, color: t.discount > 0 ? '#c4b5fd' : 'inherit' }}>
+                    {t.discount > 0 ? `-P${t.discount.toFixed(2)}` : 'P0.00'}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '4px 12px', textAlign: 'right' }}>
                     VAT
                     <input type="number" step="0.01" value={form.vatPct}
                       onChange={e => setForm({ ...form, vatPct: parseFloat(e.target.value) || 0 })}
@@ -460,6 +475,13 @@ const Quotations = () => {
                 <td style={{ border: '1px solid #000', textAlign: 'right', fontWeight: 700 }}>Sub Total</td>
                 <td style={{ border: '1px solid #000', fontWeight: 700 }}>{t.subtotal.toFixed(2)}</td>
               </tr>
+              {t.discount > 0 && (
+                <tr>
+                  <td colSpan="4" style={{ border: '1px solid #000' }}></td>
+                  <td style={{ border: '1px solid #000', textAlign: 'right', fontWeight: 700 }}>Discount</td>
+                  <td style={{ border: '1px solid #000', fontWeight: 700 }}>-{t.discount.toFixed(2)}</td>
+                </tr>
+              )}
               <tr>
                 <td colSpan="4" style={{ border: '1px solid #000' }}></td>
                 <td style={{ border: '1px solid #000', textAlign: 'right', fontWeight: 700 }}>{form.vatPct}% vat</td>

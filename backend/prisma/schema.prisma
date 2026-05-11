@@ -136,6 +136,7 @@ model Booking {
   isBlock        Boolean       @default(false)
   notes          String?
   groupId        String?       // If part of a BookingGroup (wedding, conference, etc.)
+  humanId        String?       @unique  // B-YYMMDD-NNN — receptionist-friendly ID
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -160,6 +161,7 @@ model Cancellation {
 model Folio {
   id         String   @id @default(uuid())
   bookingId  String   @unique
+  humanId    String?  @unique  // F-YYMMDD-NNN — mirrors the booking's humanId
   status     String   @default("OPEN") // OPEN, CLOSED
   totalAmount Float   @default(0)
   balanceDue  Float   @default(0)
@@ -297,6 +299,7 @@ model Quotation {
   notes         String?
   bankDetails   String?  // JSON object snapshot at issue time
   subtotal      Float    @default(0)
+  discount      Float    @default(0)
   vatPct        Float    @default(12)
   vatAmount     Float    @default(0)
   total         Float    @default(0)

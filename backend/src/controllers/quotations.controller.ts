@@ -21,11 +21,13 @@ function genQuoteNumber(): Promise<string> {
     });
 }
 
-function totalsFor(lineItems: any[], vatPct: number) {
+function totalsFor(lineItems: any[], vatPct: number, discount: number = 0) {
   const subtotal = lineItems.reduce((s, li) => s + (Number(li.total) || 0), 0);
-  const vatAmount = +(subtotal * (vatPct / 100)).toFixed(2);
-  const total = +(subtotal + vatAmount).toFixed(2);
-  return { subtotal: +subtotal.toFixed(2), vatAmount, total };
+  const disc = Math.min(Math.max(0, Number(discount) || 0), subtotal); // never go negative
+  const taxable = subtotal - disc;
+  const vatAmount = +(taxable * (vatPct / 100)).toFixed(2);
+  const total = +(taxable + vatAmount).toFixed(2);
+  return { subtotal: +subtotal.toFixed(2), discount: +disc.toFixed(2), vatAmount, total };
 }
 
 export const listQuotations = async (_req: AuthRequest, res: Response) => {
@@ -52,12 +54,12 @@ export const createQuotation = async (req: AuthRequest, res: Response) => {
   try {
     const {
       date, clientName, clientTel, clientEmail, clientAddress,
-      lineItems = [], notes, bankDetails, vatPct = 12, quoteNumber
+      lineItems = [], notes, bankDetails, vatPct = 12, discount = 0, quoteNumber
     } = req.body;
     if (!clientName) return res.status(400).json({ error: 'clientName is required' });
 
     const number = quoteNumber || await genQuoteNumber();
-    const { subtotal, vatAmount, total } = totalsFor(lineItems, vatPct);
+    const { subtotal, discount: appliedDiscount, vatAmount, total } = totalsFor(lineItems, vatPct, discount);
 
     const q = await prisma.quotation.create({
       data: {
@@ -68,7 +70,7 @@ export const createQuotation = async (req: AuthRequest, res: Response) => {
         lineItems: JSON.stringify(lineItems),
         notes,
         bankDetails: bankDetails ? JSON.stringify(bankDetails) : null,
-        subtotal, vatPct, vatAmount, total,
+        subtotal, discount: appliedDiscount, vatPct, vatAmount, total,
         createdById: req.user!.id
       }
     });
@@ -84,7 +86,7 @@ export const updateQuotation = async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
     const {
       date, clientName, clientTel, clientEmail, clientAddress,
-      lineItems, notes, bankDetails, vatPct, quoteNumber
+      lineItems, notes, bankDetails, vatPct, discount, quoteNumber
     } = req.body;
 
     const existing = await prisma.quotation.findUnique({ where: { id } });
@@ -92,7 +94,8 @@ export const updateQuotation = async (req: AuthRequest, res: Response) => {
 
     const items = lineItems !== undefined ? lineItems : JSON.parse(existing.lineItems);
     const vp = vatPct !== undefined ? vatPct : existing.vatPct;
-    const { subtotal, vatAmount, total } = totalsFor(items, vp);
+    const dc = discount !== undefined ? discount : existing.discount;
+    const { subtotal, discount: appliedDiscount, vatAmount, total } = totalsFor(items, vp, dc);
 
     const q = await prisma.quotation.update({
       where: { id },
@@ -106,7 +109,7 @@ export const updateQuotation = async (req: AuthRequest, res: Response) => {
         ...(lineItems !== undefined && { lineItems: JSON.stringify(lineItems) }),
         ...(notes !== undefined && { notes }),
         ...(bankDetails !== undefined && { bankDetails: bankDetails ? JSON.stringify(bankDetails) : null }),
-        vatPct: vp, subtotal, vatAmount, total
+        vatPct: vp, subtotal, discount: appliedDiscount, vatAmount, total
       }
     });
     res.json({ ...q, lineItems: JSON.parse(q.lineItems), bankDetails: q.bankDetails ? JSON.parse(q.bankDetails) : null });

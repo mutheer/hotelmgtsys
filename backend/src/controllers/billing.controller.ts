@@ -6,13 +6,41 @@ import { createAuditLog } from '../utils/audit';
 
 export const getFolio = async (req: AuthRequest, res: Response) => {
   try {
-    const id = req.params.id as string; // bookingId or FolioId
+    const id = req.params.id as string; // bookingId
     const folio = await prisma.folio.findFirst({
       where: { bookingId: id },
       include: { services: true, payments: true, discounts: true, booking: { include: { guest: true, room: { include: { type: true } } } } }
     }) as any;
-    if(!folio) return res.status(404).json({ error: 'Folio not found' });
-    
+
+    // No folio yet — the booking is CONFIRMED, NO_SHOW, or CANCELLED. Return
+    // the booking so the unified detail page can still render and offer the
+    // appropriate actions (check in, cancel, etc.).
+    if (!folio) {
+      const booking = await prisma.booking.findUnique({
+        where: { id },
+        include: { guest: true, room: { include: { type: true } } }
+      });
+      if (!booking) return res.status(404).json({ error: 'Booking not found' });
+      const nights = Math.max(1, Math.round((booking.checkOutDate.getTime() - booking.checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const ratePerNight = booking.room?.type?.basePrice ?? 0;
+      return res.json({
+        id: null,
+        humanId: null,
+        bookingId: booking.id,
+        status: 'NO_FOLIO',
+        services: [],
+        payments: [],
+        discounts: [],
+        booking,
+        nights, ratePerNight,
+        roomBaseCharge: 0,
+        totalServices: 0,
+        totalPayments: 0,
+        totalDiscounts: 0,
+        calculatedBalance: 0
+      });
+    }
+
     const checkIn = new Date(folio.booking.checkInDate);
     const checkOut = new Date(folio.booking.checkOutDate);
     const nights = Math.max(1, Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));

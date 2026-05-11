@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, PlusCircle, CreditCard, ChevronRight, Printer, Coffee, Shirt, Car, Tag, Trash2, Percent, Receipt } from 'lucide-react';
+import { Search, PlusCircle, CreditCard, ChevronRight, Printer, Coffee, Shirt, Car, Tag, Trash2, Percent, Receipt, LogIn as CheckInIcon, XCircle, ArrowRightLeft, UserX, Edit3, Save, Trash } from 'lucide-react';
 import PaymentModal from '../components/PaymentModal';
 
 const API = 'http://localhost:5000/api';
@@ -14,6 +14,7 @@ const QUICK_SERVICES = [
 
 const Billing = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [bookingId, setBookingId] = useState('');
   const [folio, setFolio] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -161,6 +162,103 @@ const Billing = () => {
     }
   };
 
+  // ─── Booking-level actions (work whether or not a folio exists) ────────
+  const booking = folio?.booking;
+  const status = booking?.status;
+  const hasFolio = folio && folio.status !== 'NO_FOLIO';
+
+  // Notes editor state — initialised once a booking is loaded
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [coDateDraft, setCoDateDraft] = useState('');
+  useEffect(() => {
+    if (booking) {
+      setNotesDraft(booking.notes || '');
+      setCoDateDraft(new Date(booking.checkOutDate).toISOString().split('T')[0]);
+    }
+  }, [booking?.id]);
+
+  const saveBookingEdits = async () => {
+    if (!booking) return;
+    try {
+      const payload = { notes: notesDraft };
+      // Dates only sent if booking is still active
+      if (!['CHECKED_OUT', 'CANCELLED', 'NO_SHOW'].includes(status)) payload.checkOutDate = coDateDraft;
+      await axios.patch(`${API}/bookings/${booking.id}`, payload, { headers });
+      setEditingNotes(false);
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not save changes');
+    }
+  };
+
+  const doCheckIn = async () => {
+    if (!booking) return;
+    if (!window.confirm(`Check ${booking.guest?.firstName} ${booking.guest?.lastName} into Room ${booking.room?.number}? This will open the folio.`)) return;
+    try {
+      await axios.post(`${API}/bookings/${booking.id}/checkin`, {}, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Check-in failed');
+    }
+  };
+
+  const doCancel = async () => {
+    if (!booking) return;
+    const reason = window.prompt(`Cancel booking ${booking.humanId || booking.id.slice(0, 8)}?\nEnter reason:`);
+    if (reason === null) return;
+    const feeRaw = window.prompt('Cancellation fee (P)? Leave 0 if none:', '0');
+    if (feeRaw === null) return;
+    try {
+      await axios.post(`${API}/bookings/${booking.id}/cancel`, { reason: reason || 'Cancelled by staff', feeCharged: parseFloat(feeRaw) || 0 }, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Cancellation failed');
+    }
+  };
+
+  const doNoShow = async () => {
+    if (!booking) return;
+    if (!window.confirm('Mark as NO-SHOW? The room will be released.')) return;
+    try {
+      await axios.post(`${API}/bookings/${booking.id}/no-show`, {}, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to mark no-show');
+    }
+  };
+
+  const doTransfer = async () => {
+    if (!booking) return;
+    try {
+      const res = await axios.get(`${API}/rooms`, { headers });
+      const candidates = res.data.filter(r => r.id !== booking.roomId && (r.status === 'VACANT_CLEAN' || r.status === 'VACANT_DIRTY'));
+      if (candidates.length === 0) return alert('No vacant rooms available to transfer into.');
+      const list = candidates.map((r, i) => `${i + 1}. Room ${r.number} (${r.type?.name || ''}) — ${r.status}`).join('\n');
+      const pick = window.prompt(`Transfer to which room?\n\n${list}\n\nEnter the number (1-${candidates.length}):`);
+      if (!pick) return;
+      const idx = parseInt(pick, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= candidates.length) return alert('Invalid choice.');
+      const room = candidates[idx];
+      const reason = window.prompt(`Move ${booking.guest?.firstName} to Room ${room.number}?\nReason for transfer:`) || '';
+      await axios.post(`${API}/bookings/${booking.id}/transfer`, { newRoomId: room.id, reason }, { headers });
+      fetchFolio();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Transfer failed');
+    }
+  };
+
+  const doDeleteBooking = async () => {
+    if (!booking) return;
+    if (!window.confirm(`Permanently delete booking ${booking.humanId || booking.id.slice(0, 8)}? This can't be undone.`)) return;
+    try {
+      await axios.delete(`${API}/bookings/${booking.id}`, { headers });
+      navigate('/calendar');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Delete failed');
+    }
+  };
+
   const handleCheckout = async () => {
     if (folio.calculatedBalance > 0) {
       alert(`Cannot checkout. Outstanding balance of P${folio.calculatedBalance.toFixed(2)} must be cleared first.`);
@@ -241,9 +339,11 @@ const Billing = () => {
         <button className="btn" onClick={() => setFolio(null)} style={{ background: 'rgba(255,255,255,0.05)' }}>
           &larr; Back to Search
         </button>
-        <button className="btn" onClick={issueAndPrint} style={{ background: 'var(--accent-gold)', color: '#1a1a1a' }}>
-          <Printer size={16} /> Issue & Print {documentLabel}
-        </button>
+        {hasFolio && (
+          <button className="btn" onClick={issueAndPrint} style={{ background: 'var(--accent-gold)', color: '#1a1a1a' }}>
+            <Printer size={16} /> Issue & Print {documentLabel}
+          </button>
+        )}
       </div>
 
       {/* ===== PRINTABLE INVOICE AREA ===== */}
@@ -260,12 +360,37 @@ const Billing = () => {
           <div className="glass-panel" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '15px', marginBottom: '20px' }}>
               <div>
-                <h3 style={{ fontSize: '1.4rem' }}>Folio #{folio.id.substring(0, 8).toUpperCase()}</h3>
-                <p style={{ color: 'var(--text-muted)' }}>{guest?.firstName} {guest?.lastName} • Room {room?.number || 'Unassigned'}</p>
+                <h3 style={{ fontSize: '1.4rem' }}>
+                  {hasFolio
+                    ? (folio.humanId || `Folio #${folio.id.substring(0, 8).toUpperCase()}`)
+                    : (booking.humanId || `Booking #${booking.id.substring(0, 8).toUpperCase()}`)}
+                </h3>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  {guest?.firstName} {guest?.lastName} • Room {room?.number || 'Unassigned'}
+                  {booking.humanId && hasFolio && <span style={{ marginLeft: '8px', fontSize: '0.8rem', opacity: 0.7 }}>({booking.humanId})</span>}
+                </p>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '4px' }}>
                   Stay: {new Date(folio.booking.checkInDate).toLocaleDateString('en-GB')} — {new Date(folio.booking.checkOutDate).toLocaleDateString('en-GB')}
                 </p>
+                <p style={{ marginTop: '6px' }}>
+                  <span style={{
+                    padding: '3px 10px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 600,
+                    background: status === 'CHECKED_OUT' ? 'rgba(107,114,128,0.2)'
+                      : status === 'CHECKED_IN' ? 'rgba(34,197,94,0.2)'
+                      : status === 'CONFIRMED' ? 'rgba(59,130,246,0.2)'
+                      : status === 'CANCELLED' ? 'rgba(239,68,68,0.2)'
+                      : status === 'NO_SHOW' ? 'rgba(245,158,11,0.2)'
+                      : 'rgba(255,255,255,0.1)',
+                    color: status === 'CHECKED_OUT' ? '#9ca3af'
+                      : status === 'CHECKED_IN' ? '#86efac'
+                      : status === 'CONFIRMED' ? '#93c5fd'
+                      : status === 'CANCELLED' ? '#fca5a5'
+                      : status === 'NO_SHOW' ? '#fcd34d'
+                      : '#fff'
+                  }}>{status?.replace('_', ' ')}</span>
+                </p>
                 {guest?.idNumber && <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>ID: {guest.idNumber}</p>}
+                {guest?.phone && <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>📞 {guest.phone}</p>}
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '2rem', fontWeight: 'bold', color: folio.calculatedBalance > 0 ? '#ef4444' : '#22c55e' }}>
@@ -275,6 +400,7 @@ const Billing = () => {
               </div>
             </div>
 
+            {hasFolio && (<>
             <h4 style={{ marginBottom: '15px' }}>Charges</h4>
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
               <thead>
@@ -404,10 +530,92 @@ const Billing = () => {
                 )}
               </tbody>
             </table>
+            </>)}
+
+            {/* Notes editor — works on every booking regardless of status */}
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h4 style={{ margin: 0 }}>Notes / Special Requests</h4>
+                {!editingNotes ? (
+                  <button className="btn no-print" onClick={() => setEditingNotes(true)} style={{ background: 'rgba(255,255,255,0.05)', padding: '4px 12px', fontSize: '0.85rem' }}>
+                    <Edit3 size={13} /> Edit
+                  </button>
+                ) : (
+                  <span style={{ display: 'flex', gap: '6px' }}>
+                    <button className="btn no-print" onClick={saveBookingEdits} style={{ background: 'var(--accent-gold)', color: '#1a1a1a', padding: '4px 12px', fontSize: '0.85rem' }}>
+                      <Save size={13} /> Save
+                    </button>
+                    <button className="btn no-print" onClick={() => { setEditingNotes(false); setNotesDraft(booking.notes || ''); }} style={{ background: 'rgba(255,255,255,0.05)', padding: '4px 12px', fontSize: '0.85rem' }}>
+                      Cancel
+                    </button>
+                  </span>
+                )}
+              </div>
+              {editingNotes ? (
+                <>
+                  {!['CHECKED_OUT', 'CANCELLED', 'NO_SHOW'].includes(status) && (
+                    <div className="input-group">
+                      <label className="input-label">Check-Out Date</label>
+                      <input type="date" className="input-field"
+                        value={coDateDraft}
+                        min={new Date(booking.checkInDate).toISOString().split('T')[0]}
+                        onChange={e => setCoDateDraft(e.target.value)}
+                        onClick={e => e.target.showPicker?.()} onFocus={e => e.target.showPicker?.()} />
+                    </div>
+                  )}
+                  <textarea className="input-field" rows="3" value={notesDraft}
+                    onChange={e => setNotesDraft(e.target.value)} style={{ width: '100%', resize: 'vertical' }}
+                    placeholder="Add any special requests, dietary needs, follow-ups…" />
+                </>
+              ) : (
+                <p style={{ color: booking.notes ? 'var(--text-main)' : 'var(--text-muted)', whiteSpace: 'pre-wrap', fontStyle: booking.notes ? 'normal' : 'italic' }}>
+                  {booking.notes || 'No notes on this booking yet.'}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Right: Actions (hidden on print) */}
           <div className="no-print">
+
+            {/* Status-aware booking actions panel — top of the right column */}
+            <div className="glass-panel" style={{ padding: '20px', marginBottom: '20px' }}>
+              <h4 style={{ marginBottom: '14px', fontSize: '0.95rem', color: 'var(--accent-gold)' }}>Booking Actions</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {status === 'CONFIRMED' && (
+                  <>
+                    <button onClick={doCheckIn} className="btn" style={{ background: '#22c55e', color: '#fff', justifyContent: 'flex-start' }}>
+                      <CheckInIcon size={16} /> Check In Guest
+                    </button>
+                    <button onClick={doCancel} className="btn" style={{ background: 'rgba(239,68,68,0.10)', border: '1px solid #ef4444', color: '#fca5a5', justifyContent: 'flex-start' }}>
+                      <XCircle size={16} /> Cancel Booking
+                    </button>
+                    {new Date(booking.checkInDate).getTime() < Date.now() && (
+                      <button onClick={doNoShow} className="btn" style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid #f59e0b', color: '#fcd34d', justifyContent: 'flex-start' }}>
+                        <UserX size={16} /> Mark No-Show
+                      </button>
+                    )}
+                  </>
+                )}
+                {status === 'CHECKED_IN' && (
+                  <button onClick={doTransfer} className="btn" style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid #3b82f6', color: '#93c5fd', justifyContent: 'flex-start' }}>
+                    <ArrowRightLeft size={16} /> Transfer Room
+                  </button>
+                )}
+                {(status === 'CANCELLED' || status === 'NO_SHOW') && user.role === 'OWNER' && (
+                  <button onClick={doDeleteBooking} className="btn" style={{ background: 'rgba(239,68,68,0.10)', border: '1px solid #ef4444', color: '#fca5a5', justifyContent: 'flex-start' }}>
+                    <Trash size={16} /> Delete Booking (Owner)
+                  </button>
+                )}
+                {status === 'CHECKED_OUT' && (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                    Folio closed. You can still reprint the receipt above.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {status === 'CHECKED_IN' && (<>
             <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
               <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Tag size={16} color="var(--accent-gold)" /> Quick Charges
@@ -465,6 +673,7 @@ const Billing = () => {
                 Final Checkout <ChevronRight size={18} />
               </button>
             </div>
+            </>)}
           </div>
         </div>
       </div>

@@ -4,6 +4,39 @@ import { AuthRequest } from '../middlewares/auth';
 import prisma from '../utils/prisma';
 import { createAuditLog } from '../utils/audit';
 
+// ─── Helpers ────────────────────────────────────────────────────────────
+// Strip the time-of-day off a date so date-only comparisons work safely.
+function startOfDay(d: Date | string): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+// Generate the next B-YYMMDD-NNN for today.
+async function nextBookingHumanId(tx: Prisma.TransactionClient | typeof prisma): Promise<string> {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const prefix = `B-${yy}${mm}${dd}-`;
+  const last = await tx.booking.findFirst({
+    where: { humanId: { startsWith: prefix } },
+    orderBy: { humanId: 'desc' }
+  });
+  let seq = 1;
+  if (last?.humanId) {
+    const n = parseInt(last.humanId.slice(prefix.length), 10);
+    if (!isNaN(n)) seq = n + 1;
+  }
+  return `${prefix}${String(seq).padStart(3, '0')}`;
+}
+
+// Folio human-id mirrors the booking's: B-260511-007 → F-260511-007
+function folioHumanIdFor(bookingHumanId: string | null | undefined): string | null {
+  if (!bookingHumanId) return null;
+  return bookingHumanId.replace(/^B-/, 'F-');
+}
+
 export const getBookings = async (req: AuthRequest, res: Response) => {
   try {
     // Auto-flag CONFIRMED bookings as NO_SHOW once their check-in date passed
@@ -59,6 +92,7 @@ export const getBookings = async (req: AuthRequest, res: Response) => {
         if (overlapping) return res.status(400).json({ error: 'Room is not available for these dates.' });
       }
   
+      const humanId = await nextBookingHumanId(prisma);
       const booking = await prisma.booking.create({
         data: {
           guestId,
@@ -70,10 +104,11 @@ export const getBookings = async (req: AuthRequest, res: Response) => {
           checkOutDate: new Date(checkOutDate),
           depositPaid: depositPaid ? parseFloat(depositPaid) : 0,
           notes,
-          status: 'CONFIRMED'
+          status: 'CONFIRMED',
+          humanId
         }
       });
-  
+
       await createAuditLog(req.user!.id, 'CREATE_BOOKING', 'Booking', booking.id, null, booking);
       res.status(201).json(booking);
     } catch (error) {
@@ -90,6 +125,23 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         const booking = await prisma.booking.findUnique({ where: { id } });
         if (!booking) return res.status(404).json({ error: 'Booking not found' });
         if (booking.status !== 'CONFIRMED') return res.status(400).json({ error: `Cannot check in a booking with status ${booking.status}` });
+
+        // Date-window check: a guest can only check in from their booked
+        // check-in date through (and including) their check-out date.
+        // Stops staff from checking guests in days early or days late.
+        const today = startOfDay(new Date());
+        const cin = startOfDay(booking.checkInDate);
+        const cout = startOfDay(booking.checkOutDate);
+        if (today.getTime() < cin.getTime()) {
+            return res.status(400).json({
+                error: `This booking is for ${cin.toLocaleDateString('en-GB')}. You can only check the guest in on or after that date.`
+            });
+        }
+        if (today.getTime() > cout.getTime()) {
+            return res.status(400).json({
+                error: `Check-out date (${cout.toLocaleDateString('en-GB')}) has already passed. Cancel and rebook this guest.`
+            });
+        }
 
         const finalRoomId = roomId || booking.roomId;
         if (!finalRoomId) return res.status(400).json({ error: 'A specific room must be assigned to check in.' });
@@ -110,7 +162,8 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
                 data: {
                     bookingId: id,
                     status: 'OPEN',
-                    balanceDue: 0 // Will build logic to calc room rate later
+                    balanceDue: 0,
+                    humanId: folioHumanIdFor(updatedBooking.humanId)
                 }
             });
 
@@ -224,6 +277,7 @@ export const createGroupBooking = async (req: AuthRequest, res: Response) => {
 
       const created = [];
       for (const r of rooms) {
+        const humanId = await nextBookingHumanId(tx);
         const b = await tx.booking.create({
           data: {
             guestId: organizerId,
@@ -236,7 +290,8 @@ export const createGroupBooking = async (req: AuthRequest, res: Response) => {
             checkOutDate: new Date(checkOutDate),
             depositPaid: depositPerRoom,
             notes: notes || null,
-            groupId: group.id
+            groupId: group.id,
+            humanId
           }
         });
         created.push(b);
@@ -387,14 +442,19 @@ export const updateBooking = async (req: AuthRequest, res: Response) => {
 
         const booking = await prisma.booking.findUnique({ where: { id } });
         if (!booking) return res.status(404).json({ error: 'Booking not found' });
-        if (booking.status === 'CHECKED_OUT' || booking.status === 'CANCELLED') {
-            return res.status(400).json({ error: 'Cannot modify a completed or cancelled booking' });
+
+        // Notes can be edited on any booking regardless of status (useful for
+        // adding context after the fact: "guest left an umbrella", etc.).
+        // Dates can only change on CONFIRMED/CHECKED_IN bookings.
+        const completed = ['CHECKED_OUT', 'CANCELLED', 'NO_SHOW'].includes(booking.status);
+        if (checkOutDate !== undefined && completed) {
+            return res.status(400).json({ error: 'Dates cannot be changed on a completed/cancelled booking. You can still edit notes.' });
         }
 
         const updated = await prisma.booking.update({
             where: { id },
             data: {
-                ...(checkOutDate && { checkOutDate: new Date(checkOutDate) }),
+                ...(checkOutDate && !completed && { checkOutDate: new Date(checkOutDate) }),
                 ...(notes !== undefined && { notes })
             }
         });
@@ -402,6 +462,36 @@ export const updateBooking = async (req: AuthRequest, res: Response) => {
         await createAuditLog(req.user!.id, 'UPDATE_BOOKING', 'Booking', id, booking, updated);
         res.json(updated);
     } catch (err) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Owner-only deletion. Only allowed for CANCELLED or NO_SHOW bookings, and
+// only when no folio was ever opened against them. Active reservations and
+// completed stays are accounting records and must stay.
+export const deleteBooking = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const booking = await prisma.booking.findUnique({ where: { id } });
+        if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+        if (!['CANCELLED', 'NO_SHOW'].includes(booking.status)) {
+            return res.status(400).json({ error: `Only CANCELLED or NO_SHOW bookings can be deleted. This one is ${booking.status} — cancel it first.` });
+        }
+        const folio = await prisma.folio.findFirst({ where: { bookingId: id } });
+        if (folio) {
+            return res.status(400).json({ error: 'This booking has a folio attached and cannot be hard-deleted (accounting record). Keep it cancelled instead.' });
+        }
+
+        await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+            await tx.cancellation.deleteMany({ where: { bookingId: id } });
+            await tx.booking.delete({ where: { id } });
+        });
+
+        await createAuditLog(req.user!.id, 'DELETE_BOOKING', 'Booking', id, booking, null);
+        res.json({ ok: true });
+    } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

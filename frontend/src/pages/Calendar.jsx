@@ -289,8 +289,8 @@ const Calendar = () => {
                         {booking && (
                           <button
                             type="button"
-                            onClick={() => openBooking(booking)}
-                            title={`${booking.guest?.firstName} ${booking.guest?.lastName} — ${booking.status} (click to edit)`}
+                            onClick={() => navigate(`/billing?bookingId=${booking.id}`)}
+                            title={`${booking.humanId || booking.id.slice(0, 8)} — ${booking.guest?.firstName} ${booking.guest?.lastName} — ${booking.status} (click to open folio)`}
                             style={{
                               all: 'unset',
                               cursor: 'pointer',
